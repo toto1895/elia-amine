@@ -1,1 +1,6 @@
 streamlit
+requests
+tqdm
+pandas
+numpy
+plotly
