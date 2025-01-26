@@ -41,7 +41,6 @@ def get_api():
     return api
 
 # 2. Cache all submission metadata
-@st.cache_data
 def list_submissions(_api):
     """Return submission info sorted by most recent submission time."""
     url = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission"
@@ -103,7 +102,7 @@ def add_daily_payout(df, daily_pool=225.8065):
 
 
 
-@st.cache_data
+
 def fetch_last_50_scores(_api):
     """
     Fetch the last 50 submissions (from your sorted submission list)
