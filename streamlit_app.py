@@ -31,6 +31,7 @@ st.markdown(
 
 user_env = os.getenv("USER") 
 pwd_env = os.getenv("PWD")
+pwd_view = os.getenv("PWD_VIEW")
 
 # !!!!!!!!!!!!!!!!!!
 
@@ -373,7 +374,7 @@ def overview():
     Let user pick a start/end date, then fetch & plot only that range.
     """
     # Add password protection
-    PASSWORD = "Eli@2025!"  # Set your password
+    PASSWORD = pwd_view  # Set your password
     if "authenticated_overview" not in st.session_state:
         st.session_state.authenticated_overview = False
 
