@@ -215,13 +215,27 @@ def submission_viewer():
     df_subs = list_submissions(api)
 
     df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
+    
     # 2. Let user select submission
+    #df_subs["label"] = (
+    #    "Market date " + ((df_subs["registered_at"]+pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
+    #    +" | ID: " + df_subs["id"].astype(str)
+    #    + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+    #)
+
+    # Drop the latest market_date if not logged in
+    if not st.session_state.authenticated_market_date:
+        latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
+        df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
+
+    # Create the label column
     df_subs["label"] = (
-        "Market date " + ((df_subs["registered_at"]+pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
-        +" | ID: " + df_subs["id"].astype(str)
+        "Market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
+        + " | ID: " + df_subs["id"].astype(str)
         + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        
     )
+
+
     selected_label = st.selectbox("Select submission", df_subs["label"])
 
     # Extract the row matching the chosen label
