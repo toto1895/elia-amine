@@ -53,7 +53,7 @@ def list_submissions(_api):
     # Sort descending by submission time
     df_subs = df_subs.sort_values("registered_at", ascending=False)
     df_subs["registered_at"] = df_subs["registered_at"].dt.round("T")
-    df_subs = df_subs.drop_duplicates(subset=["registered_at"], keep="last")
+    df_subs = df_subs.drop_duplicates(subset=["registered_at"], keep="first")
     return df_subs
 
 # 3. Fetch data (scores + forecasts) only for the selected submission
@@ -241,6 +241,8 @@ def submission_viewer():
         + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
     )
 
+
+    df_subs = df_subs.drop_duplicates(subset=["market_date"], keep="first")
 
     selected_label = st.selectbox("Select submission", df_subs["label"])
 
