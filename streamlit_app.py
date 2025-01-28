@@ -353,14 +353,27 @@ def overview():
     """
     Let user pick a start/end date, then fetch & plot only that range.
     """
+    # Add password protection
+    PASSWORD = "Eli@2025!"  # Set your password
+    if "authenticated_overview" not in st.session_state:
+        st.session_state.authenticated_overview = False
+
+    if not st.session_state.authenticated_overview:
+        password = st.text_input("Enter Password to Access Overview:", type="password")
+        if st.button("Login"):
+            if password == PASSWORD:
+                st.session_state.authenticated_overview = True
+                st.success("Access granted!")
+            else:
+                st.error("Invalid password!")
+        return
+
+    # If authenticated, proceed with the overview logic
     st.title("Ranking & PnL")
-    
     api = get_api()
     data = fetch_last_50_scores(api)
     st.plotly_chart(plot_rank_and_payout_separate(data))
-    st.dataframe(data.sort_values(by='market_date',ascending=False).drop(columns='variable'))
-
-
+    st.dataframe(data.sort_values(by='market_date', ascending=False).drop(columns='variable'))
     
 
 # ---------------- Main App with Navigation ----------------
