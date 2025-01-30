@@ -245,7 +245,22 @@ def submission_viewer():
 
     df_subs = df_subs.drop_duplicates(subset=["dt"], keep="first")
 
+    PASSWORD = pwd_view  # Set your password
+    if "authenticated_overview" not in st.session_state:
+        st.session_state.authenticated_overview = False
+
+    if not st.session_state.authenticated_overview:
+        password = st.text_input("Enter Password to Access Overview:", type="password")
+        if st.button("Login"):
+            if password == PASSWORD:
+                st.session_state.authenticated_overview = True
+                st.success("Access granted!")
+            else:
+                st.error("Invalid password!")
+        return
+
     selected_label = st.selectbox("Select submission", df_subs["label"])
+
 
     # Extract the row matching the chosen label
     chosen_row = df_subs.loc[df_subs["label"] == selected_label].iloc[0]
