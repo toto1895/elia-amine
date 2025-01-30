@@ -246,8 +246,6 @@ def submission_viewer():
     df_subs = df_subs.drop_duplicates(subset=["dt"], keep="first")
 
     PASSWORD = pwd_view  # Set your password
-    if "authenticated_overview" not in st.session_state:
-        st.session_state.authenticated_overview = False
 
     if not st.session_state.authenticated_overview:
         password = st.text_input("Enter Password to Access Overview:", type="password")
