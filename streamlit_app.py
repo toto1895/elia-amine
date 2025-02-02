@@ -225,14 +225,14 @@ def submission_viewer():
     #)
 
     # Drop the latest market_date if not logged in
-    try:
-        if not st.session_state.authenticated_overview:
-            latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
-            df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
-    except:
-        latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
-        #latest_market_date = (df_subs["registered_at"]).max().date()
-        df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
+    #try:
+    #    if not st.session_state.authenticated_overview:
+    #        latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
+    #        df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
+    #except:
+    #    latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
+    #    #latest_market_date = (df_subs["registered_at"]).max().date()
+    #    df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
 
 
     # Create the label column
