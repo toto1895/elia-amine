@@ -231,7 +231,7 @@ def submission_viewer():
     #        df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
     #except:
     latest_market_date = (df_subs["registered_at"] + pd.Timedelta(days=1)).max().date()
-    latest_market_date = (df_subs["registered_at"]).max().date()
+    #latest_market_date = (df_subs["registered_at"]).max().date()
     df_subs = df_subs[~((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.date == latest_market_date)]
 
 
@@ -244,7 +244,7 @@ def submission_viewer():
     df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
 
 
-    df_subs = df_subs.drop_duplicates(subset=["dt"], keep="first")
+    df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
 
     selected_label = st.selectbox("Select submission", df_subs["label"])
