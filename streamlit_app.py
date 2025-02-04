@@ -223,6 +223,35 @@ def calculate_rmse(actual, predicted):
     predicted = np.array(predicted)
     return np.sqrt(np.mean((predicted - actual) ** 2))
 
+def calculate_mase(actual, predicted, training_actual=None):
+    """
+    Compute Mean Absolute Scaled Error (MASE).
+
+    Parameters:
+    - actual: array-like of true values for the forecast period.
+    - predicted: array-like of forecasted values.
+    - training_actual: array-like of in-sample actual values. If provided,
+      the scaling factor is computed on this data; otherwise, it's computed on `actual`.
+
+    Returns:
+    - MASE as a float.
+    """
+    actual = np.array(actual)
+    predicted = np.array(predicted)
+    
+    # Use training data for scaling if provided; otherwise, use the actual series.
+    train = np.array(training_actual) if training_actual is not None else actual
+    
+    # Compute naive forecast errors: absolute differences of successive observations
+    naive_errors = np.abs(np.diff(train))
+    
+    scale = np.mean(naive_errors)
+    if scale == 0:
+        return np.nan
+
+    # Compute MASE
+    mase = np.mean(np.abs(actual - predicted)) / scale
+    return mase
 
 def submission_viewer():
     st.subheader("Submission Viewer")
@@ -302,8 +331,11 @@ def submission_viewer():
     myrmse = round(calculate_rmse(df_sc['q50'], df_sc['actual elia']),1)
     eliarmse = round(calculate_rmse(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
 
-    st.markdown(f"**RMSE (q50 vs actual elia):** {myrmse}")
-    st.markdown(f"**RMSE (DA elia (11AM) vs actual elia):** {eliarmse}")
+    mymase = round(calculate_mase(df_sc['q50'], df_sc['actual elia']),1)
+    eliamase = round(calculate_mase(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
+
+    st.markdown(f"**RMSE (q50 vs actual elia):** {myrmse} , MASE : {mymase}")
+    st.markdown(f"**RMSE (DA elia (11AM) vs actual elia):** {eliarmse} , MASE : {eliamase}")
 
     fig = go.Figure()
 
