@@ -298,7 +298,7 @@ def submission_viewer():
     # )
     data_slice = forecasts.dropna(subset='q10')
     # data_slice = forecasts.loc[mask]
-    df_sc = data_slice[['q50','DA elia (11AM)','actual elia']].copy()
+    df_sc = data_slice[['q50','DA elia (11AM)','actual elia']].copy().dropna()
     myrmse = round(calculate_rmse(df_sc['q50'], df_sc['actual elia']),1)
     eliarmse = round(calculate_rmse(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
 
