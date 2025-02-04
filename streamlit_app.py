@@ -334,8 +334,8 @@ def submission_viewer():
     mymase = round(calculate_mase(df_sc['q50'], df_sc['actual elia']),1)
     eliamase = round(calculate_mase(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
 
-    st.markdown(f"**RMSE (q50 vs actual elia):** {myrmse} , MASE : {mymase}")
-    st.markdown(f"**RMSE (DA elia (11AM) vs actual elia):** {eliarmse} , MASE : {eliamase}")
+    st.markdown(f"**RMSE (q50):** {myrmse} , MASE : {mymase}")
+    st.markdown(f"**RMSE (DA elia):** {eliarmse} , MASE : {eliamase}")
 
     fig = go.Figure()
 
