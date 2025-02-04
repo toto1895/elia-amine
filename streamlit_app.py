@@ -5,6 +5,7 @@ import requests
 from predico import PredicoAPI
 import downloader
 import os
+import numpy as np 
 
 
 st.set_page_config(
@@ -207,6 +208,21 @@ def plot_rank_and_payout_separate(df):
 
     return fig
 # ---------------- Main App ----------------
+def calculate_rmse(actual, predicted):
+    """
+    Compute Root Mean Square Error (RMSE).
+
+    Parameters:
+    - actual: array-like of true values.
+    - predicted: array-like of predicted values.
+
+    Returns:
+    - RMSE as a float.
+    """
+    actual = np.array(actual)
+    predicted = np.array(predicted)
+    return np.sqrt(np.mean((predicted - actual) ** 2))
+
 
 def submission_viewer():
     st.subheader("Submission Viewer")
@@ -282,7 +298,11 @@ def submission_viewer():
     # )
     data_slice = forecasts.dropna(subset='q10')
     # data_slice = forecasts.loc[mask]
+    myrmse = round(calculate_rmse(data_slice['q50'], data_slice['actual elia']),1)
+    eliarmse = round(calculate_rmse(data_slice['DA elia (11AM)'], data_slice['actual elia']),1)
 
+    st.markdown(f"**RMSE (q50 vs actual elia):** {myrmse}")
+    st.markdown(f"**RMSE (DA elia (11AM) vs actual elia):** {eliarmse}")
 
     fig = go.Figure()
 
