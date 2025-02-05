@@ -289,7 +289,7 @@ def submission_viewer():
     df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
 
 
-    df_subs = df_subs.drop_duplicates(subset=["dt"], keep="first")
+    df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
 
     selected_label = st.selectbox("Select submission", df_subs["label"])
