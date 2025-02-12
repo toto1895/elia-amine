@@ -449,7 +449,7 @@ def benchmark():
     #    st.error(f"Error loading data: {e}")
     if st.button("List files in bucket"):
         try:
-            files = conn.ls(bucket_name)
+            files = conn._instance.ls(bucket_name)
             st.write("Files in bucket:", files)
         except Exception as e:
             st.error(f"Error listing files: {e}")
