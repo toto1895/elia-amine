@@ -444,12 +444,9 @@ def get_latest_da_fcst_file(selected_date,files):
         if date_part == selected_str and int(hour) < 10:
                     # Convert time to minutes for sorting (HH*60 + MM)
             files_time.append(f)
-
     if  len(files_time)==0:
         st.warning("No files found for the selected date before 10:00.")
         return
-
-    # Select the file with the latest time before 10:00
     selected_file = sorted(files_time)
     return selected_file[-1]
 
@@ -459,19 +456,21 @@ def benchmark():
     
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
-    #file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
-    #file_path = f"oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
-    #df = conn.read(file_path, input_format="parquet", ttl=0)
+    l=[]
+    for model in ['metno','dmi_seamless','meteofrance','icon','knmi']:
+        try:
+            files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/{model}")
+            sel = get_latest_da_fcst_file(selected_date,files)
+            df = conn.read(sel, input_format="parquet", ttl=0)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
+            l.append(df)
+        except:
+            pass
+    
+    df = pd.concat(l,axis=1)
+    st.dataframe(df)
 
-    #try:
-    #    st.success("Data loaded successfully!")
-    #    st.dataframe(df)
-    #except Exception as e:
-    #    st.error(f"Error loading data: {e}")
-    files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/metno")
-    st.write(files[0])
-    sel = get_latest_da_fcst_file(selected_date,files)
-    st.write(sel)
+
+
 
 
 
