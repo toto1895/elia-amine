@@ -543,7 +543,7 @@ def benchmark():
     fig.update_layout(
         updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
     )
-    st.plotly_chart
+    st.plotly_chart(fig)
 
 
     def mean_pinball_loss(actual, forecast, alpha=0.5):
