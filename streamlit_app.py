@@ -528,8 +528,8 @@ def benchmark():
             # compute_scores(grp, 'submission_0.5')
         ]))
     )
-    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T.sort_values()
-    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T.sort_values()
+    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
+    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
 
 
     st.dataframe(rmse.T)
