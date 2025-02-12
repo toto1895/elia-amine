@@ -494,11 +494,12 @@ def benchmark():
             df = conn.read(sel, input_format="parquet", ttl=600)
             print(df.columns)
             try:
-                df = df[[0.1,0.5,0.9]].add_prefix(f'{model}_')
+                df = df[[0.1,0.5,0.9]]
             except:
-                df = df[['0.1','0.5','0.9']].add_prefix(f'{model}_')
+                df = df[['0.1','0.5','0.9']]
+
             df.columns = [0.1,0.5,0.9]
-            l.append(df)
+            l.append(df.add_prefix(f'{model}_'))
         except Exception as e:
             print(e)
     
