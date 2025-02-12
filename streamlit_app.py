@@ -501,7 +501,8 @@ def benchmark():
         except:
             pass
     
-    df = pd.concat([latest_actual,l],axis=1).dropna()
+    df = pd.concat(l,axis=1)
+    df = pd.concat([latest_actual,df],axis=1).dropna()
     st.dataframe(df)
 
 
