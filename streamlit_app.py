@@ -438,16 +438,21 @@ def benchmark():
     
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
-    file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
-    file_path = f"oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
-    
-    df = conn.read(file_path, input_format="parquet", ttl=0)
+    #file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
+    #file_path = f"oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
+    #df = conn.read(file_path, input_format="parquet", ttl=0)
 
-    try:
-        st.success("Data loaded successfully!")
-        st.dataframe(df)
-    except Exception as e:
-        st.error(f"Error loading data: {e}")
+    #try:
+    #    st.success("Data loaded successfully!")
+    #    st.dataframe(df)
+    #except Exception as e:
+    #    st.error(f"Error loading data: {e}")
+    if st.button("List files in bucket"):
+        try:
+            files = conn.ls(bucket_name)
+            st.write("Files in bucket:", files)
+        except Exception as e:
+            st.error(f"Error listing files: {e}")
 
 
 
