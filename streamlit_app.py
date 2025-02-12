@@ -516,7 +516,7 @@ def benchmark():
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae, f'{col}_Pinball': pinball})
 
     scores = (
-        g.groupby(df.index.date)
+        df.groupby(df.index.date)
         .apply(lambda grp: pd.concat([
             compute_scores(grp, 'metno_0.5'),
             compute_scores(grp, 'meteofrance_0.5'),
