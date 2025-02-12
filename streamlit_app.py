@@ -486,7 +486,7 @@ def benchmark():
     l=[]
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
-            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}",max_results=50)
+            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=50)
             print(files)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
@@ -524,6 +524,8 @@ def benchmark():
 
     st.dataframe(rmse.T)
     st.dataframe(mae.T)
+
+    st.dataframe(df)
 
 
 
