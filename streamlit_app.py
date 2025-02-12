@@ -502,6 +502,7 @@ def benchmark():
             pass
     
     df = pd.concat(l,axis=1)
+    df.index = pd.to_datetime(df.index)
     df = pd.concat([latest_actual,df],axis=1).dropna()
     st.dataframe(df)
 
