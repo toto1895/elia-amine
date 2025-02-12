@@ -426,7 +426,10 @@ def submission_viewer():
 
     st.plotly_chart(fig)
 
+def benchmark():
+    st.title("Benchmark")
 
+    selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
 def overview():
     """
@@ -458,12 +461,14 @@ def overview():
 # ---------------- Main App with Navigation ----------------
 def main():
     st.sidebar.title("Navigation")
-    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview"])
+    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview",'Benchmark'])
     if page_choice == "Submission Viewer":
         submission_viewer()
-    else:
+    elif page_choice== 'Overview':
         overview()
-    
+    elif page_choice == 'Benchmark':
+        benchmark()
+        
 
 if __name__ == "__main__":
     main()
