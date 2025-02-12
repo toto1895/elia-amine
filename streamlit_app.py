@@ -488,7 +488,7 @@ def benchmark():
     
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
-    latest_actual = get_latest_wind_offshore()
+    latest_actual = get_latest_wind_offshore(selected_date)
 
     l=[]
     for model in ['metno','dmi_seamless','meteofrance','icon','knmi']:
