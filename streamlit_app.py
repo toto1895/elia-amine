@@ -450,9 +450,8 @@ def get_latest_da_fcst_file(selected_date,files):
         return
 
     # Select the file with the latest time before 10:00
-    print(files_time)
-    selected_file = sorted(files_time, key=lambda x: x[1], reverse=True)[0][0]
-    return selected_file
+    selected_file = sorted(files_time)
+    return selected_file[-1]
 
 def benchmark():
     st.title("Benchmark Models")
