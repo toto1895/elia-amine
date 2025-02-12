@@ -491,10 +491,10 @@ def benchmark():
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
-            df = conn.read(sel, input_format="parquet", ttl=0)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
+            df = conn.read(sel, input_format="parquet", ttl=600)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
             l.append(df)
-        except:
-            pass
+        except Exception as e:
+            print(2)
     
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
