@@ -34,6 +34,7 @@ user_env = os.getenv("USER")
 pwd_env = os.getenv("PWD")
 pwd_view = os.getenv("PWD_VIEW")
 
+
 # !!!!!!!!!!!!!!!!!!
 
 
@@ -162,6 +163,7 @@ def fetch_last_50_scores(_api):
 from plotly.subplots import make_subplots
 
 import plotly.graph_objects as go
+
 def plot_rank_and_payout_separate(df):
     # Prepare data
     df_rmse = df[df["metric"] == "rmse"].copy()
@@ -252,6 +254,7 @@ def calculate_mase(actual, predicted, training_actual=None):
     # Compute MASE
     mase = np.mean(np.abs(actual - predicted)) / scale
     return mase
+
 
 def submission_viewer():
     st.subheader("Submission Viewer")
@@ -426,10 +429,25 @@ def submission_viewer():
 
     st.plotly_chart(fig)
 
+
+
 def benchmark():
-    st.title("Benchmark")
+    st.title("Benchmark Models")
 
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
+
+    file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
+    file_path = f"gs:oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
+
+    try:
+        df = pd.read_parquet(file_path)
+        st.success("Data loaded successfully!")
+        st.dataframe(df)
+    except Exception as e:
+        st.error(f"Error loading data: {e}")
+
+
+
 
 def overview():
     """
