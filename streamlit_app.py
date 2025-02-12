@@ -474,7 +474,7 @@ def benchmark():
     #except Exception as e:
     #    st.error(f"Error loading data: {e}")
     files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/metno")
-    st.write(files)
+    #st.write(files)
     sel = get_latest_da_fcst_file(selected_date,files)
     st.write(sel)
 
