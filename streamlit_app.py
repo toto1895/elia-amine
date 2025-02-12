@@ -443,6 +443,7 @@ def get_latest_da_fcst_file(selected_date,files):
         match = re.match(pattern, basename)
         if match:
             date_part, hour, minute = match.groups()
+            print(date_part,hour)
             if date_part == selected_str and int(hour) < 10:
                 # Convert time to minutes for sorting (HH*60 + MM)
                 files_time.append((f, int(hour) * 60 + int(minute)))
