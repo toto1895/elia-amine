@@ -492,12 +492,10 @@ def benchmark():
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
-            print(df.columns)
             try:
                 df = df[[0.1,0.5,0.9]]
             except:
                 df = df[['0.1','0.5','0.9']]
-
             df.columns = [0.1,0.5,0.9]
             l.append(df.add_prefix(f'{model}_'))
         except Exception as e:
