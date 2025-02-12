@@ -440,6 +440,7 @@ def get_latest_da_fcst_file(selected_date,files):
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1]
+        print(basename)
         match = re.match(pattern, basename)
         if match:
             date_part, hour, minute = match.groups()
