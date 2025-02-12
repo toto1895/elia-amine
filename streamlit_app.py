@@ -521,19 +521,19 @@ def benchmark():
         .apply(lambda grp: pd.concat([
             compute_scores(grp, 'metno_0.5'),
             compute_scores(grp, 'meteofrance_0.5'),
-            compute_scores(grp, 'avg'),
+            compute_scores(grp, 'avg_0.5'),
             compute_scores(grp, 'icon_0.5'),
             compute_scores(grp, 'knmi_0.5'),
             compute_scores(grp, 'dmi_seamless_0.5'),
             # compute_scores(grp, 'submission_0.5')
         ]))
     )
-    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().sort_values()
-    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().sort_values()
+    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T.sort_values()
+    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T.sort_values()
 
 
-    st.dataframe(rmse)
-    st.dataframe(mae)
+    st.dataframe(rmse.T)
+    st.dataframe(mae.T)
 
 
 
