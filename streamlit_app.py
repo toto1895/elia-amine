@@ -449,7 +449,6 @@ def get_latest_da_fcst_file(selected_date,files):
 
     if not files_time:
         st.warning("No files found for the selected date before 10:00.")
-        return
 
     # Select the file with the latest time before 10:00
     print(files_time)
