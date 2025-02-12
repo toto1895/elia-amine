@@ -430,7 +430,29 @@ def submission_viewer():
 
     st.plotly_chart(fig)
 
+import re
+def get_latest_da_fcst_file(selected_date,files):
+    selected_str = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
+    pattern = r"(\d{4}_\d{2}_\d{2})_(\d{2})_(\d{2})_metno\.parquet"
+    files_time = []
+    for f in files:
+        if not f.endswith(".parquet"):
+            continue
+        basename = f.split("/")[-1]
+        match = re.match(pattern, basename)
+        if match:
+            date_part, hour, minute = match.groups()
+            if date_part == selected_str and int(hour) < 10:
+                # Convert time to minutes for sorting (HH*60 + MM)
+                files_time.append((f, int(hour) * 60 + int(minute)))
 
+    if not files_time:
+        st.warning("No files found for the selected date before 10:00.")
+        return
+
+    # Select the file with the latest time before 10:00
+    selected_file = sorted(files_time, key=lambda x: x[1], reverse=True)[0][0]
+    return selected_file
 
 def benchmark():
     st.title("Benchmark Models")
@@ -447,13 +469,10 @@ def benchmark():
     #    st.dataframe(df)
     #except Exception as e:
     #    st.error(f"Error loading data: {e}")
-    if st.button("List files in bucket"):
-        try:
-            files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/metno")
-            st.write("Files in bucket:", files)
-        except Exception as e:
-            st.error(f"Error listing files: {e}")
+    files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/metno")
 
+    sel = get_latest_da_fcst_file(selected_date,files)
+    st.write(sel)
 
 
 
