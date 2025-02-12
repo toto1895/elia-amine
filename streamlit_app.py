@@ -525,8 +525,8 @@ def benchmark():
     mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
 
 
-    st.dataframe(rmse.T)
-    st.dataframe(mae.T)
+    st.dataframe(rmse.T.tail(1))
+    st.dataframe(mae.T.tail(1))
 
     st.dataframe(df)
 
