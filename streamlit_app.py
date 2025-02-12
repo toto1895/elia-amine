@@ -444,7 +444,6 @@ def benchmark():
     df = conn.read("streamlit-bucket/myfile.csv", input_format="parquet", ttl=0)
 
     try:
-        df = pd.read_parquet(file_path)
         st.success("Data loaded successfully!")
         st.dataframe(df)
     except Exception as e:
