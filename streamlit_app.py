@@ -441,12 +441,13 @@ def get_latest_da_fcst_file(selected_date,files):
         basename = f.split("/")[-1].split('_')
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
-        print(date_part)
-        print(selected_date)
-        print(hour)
-        if date_part == selected_str and int(hour) < 10:
-                    # Convert time to minutes for sorting (HH*60 + MM)
+        
+        if (date_part == selected_str) and (int(hour) < 10):
+            print(date_part)
+            print(selected_date)
+            print(int(hour))
             files_time.append(f)
+            
     if  len(files_time)==0:
         #st.warning("No files found for the selected date before 10:00.")
         return
