@@ -476,6 +476,8 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     # d = d.tz_localize('CET')
     return d.rename(columns={'actual elia':'actual'})
 
+import ipywidgets as widgets
+from IPython.display import display
 def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
@@ -509,26 +511,22 @@ def benchmark():
     y_cols = df.columns
 
     fig = go.Figure()
-
-    # Add traces; only the first trace is visible initially.
-    for i, col in enumerate(y_cols):
+    for col in y_cols:
         fig.add_trace(go.Scatter(x=df.index, y=df[col],
-                                mode='lines', name=col,
-                                visible=(i == 0)))
+                                mode='lines', name=col, visible=False))
 
-    # Create dropdown buttons.
-    buttons = []
-    for i, col in enumerate(y_cols):
-        visible = [False] * len(y_cols)
-        visible[i] = True
-        buttons.append(dict(method='update',
-                            label=col,
-                            args=[{'visible': visible},
-                                {'title': f"Line Plot: {col}"}]))
+    # Multi-select widget
+    selector = widgets.SelectMultiple(options=y_cols, value=[y_cols[0]], description='Lines:')
+    display(selector)
 
-    fig.update_layout(
-        updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
-    )
+    def update_figure(change):
+        selected = change['new']
+        for trace in fig.data:
+            trace.visible = trace.name in selected
+        fig.show()
+
+    selector.observe(update_figure, names='value')
+    update_figure({'new': selector.value})
     st.plotly_chart(fig)
 
 
