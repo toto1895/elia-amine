@@ -504,7 +504,29 @@ def benchmark():
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
     df = pd.concat([latest_actual,df],axis=1).dropna()
-    st.dataframe(df)
+
+    def compute_scores(group, col):
+        error = group.actual - group[col]
+        rmse = np.sqrt(np.mean(error**2))
+        mae  = np.mean(np.abs(error))
+        pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
+        return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae, f'{col}_Pinball': pinball})
+
+    scores = (
+        g.groupby(g.index.date)
+        .apply(lambda grp: pd.concat([
+            compute_scores(grp, 'metno_0.5'),
+            compute_scores(grp, 'meteofrance_0.5'),
+            # compute_scores(grp, 'hybrid'),
+            compute_scores(grp, 'icon_0.5'),
+            compute_scores(grp, 'knmi_0.5'),
+            compute_scores(grp, 'dmi_seamless_0.5'),
+            # compute_scores(grp, 'submission_0.5')
+        ]))
+    )
+
+
+    st.dataframe(scores)
 
 
 
