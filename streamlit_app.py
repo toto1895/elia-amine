@@ -6,6 +6,7 @@ from predico import PredicoAPI
 import downloader
 import os
 import numpy as np 
+from st_files_connection import FilesConnection
 
 
 st.set_page_config(
@@ -433,11 +434,14 @@ def submission_viewer():
 
 def benchmark():
     st.title("Benchmark Models")
-
+    conn = st.connection('gcs', type=FilesConnection)
+    
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
     file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
     file_path = f"gs:oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
+    
+    df = conn.read("streamlit-bucket/myfile.csv", input_format="parquet", ttl=0)
 
     try:
         df = pd.read_parquet(file_path)
