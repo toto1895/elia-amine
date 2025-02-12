@@ -496,7 +496,7 @@ def benchmark():
             try:
                 df = df[[0.1,0.5,0.9]].add_prefix(f'{model}_')
             except:
-                df = df[['p10','p50','p90']].add_prefix(f'{model}_')
+                df = df[['0.1','0.5','0.9']].add_prefix(f'{model}_')
             df.columns = [0.1,0.5,0.9]
             l.append(df)
         except Exception as e:
