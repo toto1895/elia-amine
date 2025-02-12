@@ -437,16 +437,14 @@ def get_latest_da_fcst_file(selected_date,files):
     pattern = r"(\d{4}_\d{2}_\d{2})_(\d{2})_(\d{2})_metno\.parquet"
     files_time = []
     for f in files:
-        print(f)
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1]
         match = re.match(pattern, basename)
-        if match:
-            date_part, hour, minute = match.groups()
-            if date_part == selected_str and int(hour) < 10:
+        date_part, hour, minute = match.groups()
+        if date_part == selected_str and int(hour) < 10:
                 # Convert time to minutes for sorting (HH*60 + MM)
-                files_time.append((f, int(hour) * 60 + int(minute)))
+            files_time.append((f, int(hour) * 60 + int(minute)))
 
     if  len(files_time)==0:
         st.warning("No files found for the selected date before 10:00.")
