@@ -451,10 +451,10 @@ def get_latest_da_fcst_file(selected_date,files):
     return selected_file[-1]
 
 def get_latest_wind_offshore(start) -> pd.DataFrame:
-    end = start + pd.Timedelta(days=1)
+    start = start + pd.Timedelta(days=1)
+    end = start
     start = start.strftime('%Y-%m-%d')
     end = end.strftime('%Y-%m-%d')
-    start = end
     # url = (
     #     f"https://griddata.elia.be/eliabecontrols.prod/interface/fdn/download/"
     #     f"windweekly/currentselection?dtFrom={start}&dtTo={end}&regionId=1&"
