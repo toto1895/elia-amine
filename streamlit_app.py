@@ -441,6 +441,9 @@ def get_latest_da_fcst_file(selected_date,files):
         basename = f.split("/")[-1].split('_')
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
+        print(date_part)
+        print(selected_date)
+        print(hour)
         if date_part == selected_str and int(hour) < 10:
                     # Convert time to minutes for sorting (HH*60 + MM)
             files_time.append(f)
