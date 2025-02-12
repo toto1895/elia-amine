@@ -450,11 +450,45 @@ def get_latest_da_fcst_file(selected_date,files):
     selected_file = sorted(files_time)
     return selected_file[-1]
 
+def get_latest_wind_offshore(start) -> pd.DataFrame:
+    end = start + pd.Timedelta(days=1)
+    start = start.strftime('%Y-%m-%d')
+    end = end.strftime('%Y-%m-%d')
+    # url = (
+    #     f"https://griddata.elia.be/eliabecontrols.prod/interface/fdn/download/"
+    #     f"windweekly/currentselection?dtFrom={start}&dtTo={end}&regionId=1&"
+    #     f"isOffshore=True&isEliaConnected=&forecast=wind"
+    #     )
+    url = (f'https://griddata.elia.be/eliabecontrols.prod/interface/windforecasting/'
+    f'forecastdata?beginDate={start}&endDate={end}&region=1&'
+    f'isEliaConnected=&isOffshore=True')
+    # d =pd.read_excel(url, skiprows=range(5), engine='xlrd').rename(
+    #     columns={'Measured & upscaled [MW]':'actual elia','Monitored Capacity [MW]':'capa',
+    #              'DateTime':'Datetime','Day-ahead forecast (11h00) [MW]':'DA elia (11AM)',
+    #              'Most recent forecast [MW]':'latest elia forecast'
+    #              })
+    d = pd.read_json(url).rename(
+        columns={
+            'dayAheadConfidence10':'DA elia (11AM) P10',
+            'dayAheadConfidence90':'DA elia (11AM) P90',
+            'dayAheadForecast':'DA elia (11AM)',
+            'monitoredCapacity':'capa',
+            'mostRecentForecast':'latest elia forecast',
+            'realtime':'actual elia',
+            'startsOn':'Datetime',
+            })[['DA elia (11AM)','actual elia','Datetime','latest elia forecast']]
+    d['Datetime'] = pd.to_datetime(d['Datetime'])
+    d.index = d['Datetime']
+    # d = d.tz_localize('CET')
+    return d
+
 def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
     
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
+
+    latest_actual = get_latest_wind_offshore()
 
     l=[]
     for model in ['metno','dmi_seamless','meteofrance','icon','knmi']:
@@ -467,7 +501,7 @@ def benchmark():
         except:
             pass
     
-    df = pd.concat(l,axis=1)
+    df = pd.concat([latest_actual,l],axis=1).dropna()
     st.dataframe(df)
 
 
