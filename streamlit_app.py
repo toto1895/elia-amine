@@ -505,6 +505,9 @@ def benchmark():
     df.index = pd.to_datetime(df.index)
     df = pd.concat([latest_actual,df],axis=1).dropna()
 
+    def mean_pinball_loss(actual, forecast, alpha=0.5):
+        return np.mean(np.maximum(alpha*(actual - forecast), (alpha-1)*(actual - forecast)))
+
     def compute_scores(group, col):
         error = group.actual - group[col]
         rmse = np.sqrt(np.mean(error**2))
