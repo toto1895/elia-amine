@@ -439,7 +439,7 @@ def benchmark():
     selected_date = st.date_input("Select a date", pd.to_datetime("today"))
 
     file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
-    file_path = f"gs:oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
+    file_path = f"oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
     
     df = conn.read(file_path, input_format="parquet", ttl=0)
 
