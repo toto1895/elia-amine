@@ -478,7 +478,7 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
 
 def benchmark():
     st.title("Benchmark Models")
-    
+    conn = st.connection('gcs', type=FilesConnection)
 
     selected_date = st.date_input("Submission date", pd.to_datetime("today"))
 
@@ -487,7 +487,7 @@ def benchmark():
     l=[]
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
-            conn = st.connection('gcs', type=FilesConnection)
+            
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
