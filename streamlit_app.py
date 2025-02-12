@@ -445,7 +445,7 @@ def get_latest_da_fcst_file(selected_date,files):
                     # Convert time to minutes for sorting (HH*60 + MM)
             files_time.append(f)
     if  len(files_time)==0:
-        st.warning("No files found for the selected date before 10:00.")
+        #st.warning("No files found for the selected date before 10:00.")
         return
     selected_file = sorted(files_time)
     return selected_file[-1]
@@ -455,19 +455,11 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     end = start
     start = start.strftime('%Y-%m-%d')
     end = end.strftime('%Y-%m-%d')
-    # url = (
-    #     f"https://griddata.elia.be/eliabecontrols.prod/interface/fdn/download/"
-    #     f"windweekly/currentselection?dtFrom={start}&dtTo={end}&regionId=1&"
-    #     f"isOffshore=True&isEliaConnected=&forecast=wind"
-    #     )
+
     url = (f'https://griddata.elia.be/eliabecontrols.prod/interface/windforecasting/'
     f'forecastdata?beginDate={start}&endDate={end}&region=1&'
     f'isEliaConnected=&isOffshore=True')
-    # d =pd.read_excel(url, skiprows=range(5), engine='xlrd').rename(
-    #     columns={'Measured & upscaled [MW]':'actual elia','Monitored Capacity [MW]':'capa',
-    #              'DateTime':'Datetime','Day-ahead forecast (11h00) [MW]':'DA elia (11AM)',
-    #              'Most recent forecast [MW]':'latest elia forecast'
-    #              })
+
     d = pd.read_json(url).rename(
         columns={
             'dayAheadConfidence10':'DA elia (11AM) P10',
@@ -516,18 +508,15 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    scores = (
-        df.groupby(df.index.date)
-        .apply(lambda grp: pd.concat([
-            compute_scores(grp, 'metno_0.5'),
-            compute_scores(grp, 'meteofrance_0.5'),
-            compute_scores(grp, 'avg_0.5'),
-            compute_scores(grp, 'icon_0.5'),
-            compute_scores(grp, 'knmi_0.5'),
-            compute_scores(grp, 'dmi_seamless_0.5'),
-            # compute_scores(grp, 'submission_0.5')
-        ]))
+    cols = [
+    'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
+    'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5'
+        ]
+
+    scores = df.groupby(df.index.date).apply(
+    lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
     )
+    
     rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
     mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
 
