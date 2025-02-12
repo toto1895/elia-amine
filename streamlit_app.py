@@ -431,6 +431,7 @@ def submission_viewer():
     st.plotly_chart(fig)
 
 import re
+
 def get_latest_da_fcst_file(selected_date,files):
     selected_str = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
     pattern = r"(\d{4}_\d{2}_\d{2})_(\d{2})_(\d{2})_metno\.parquet"
@@ -470,7 +471,7 @@ def benchmark():
     #except Exception as e:
     #    st.error(f"Error loading data: {e}")
     files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/metno")
-
+    st.write(files)
     sel = get_latest_da_fcst_file(selected_date,files)
     st.write(sel)
 
