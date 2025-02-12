@@ -476,8 +476,6 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     # d = d.tz_localize('CET')
     return d.rename(columns={'actual elia':'actual'})
 
-import ipywidgets as widgets
-from IPython.display import display
 def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
@@ -510,24 +508,42 @@ def benchmark():
 
     y_cols = df.columns
 
+    default_cols = ['actual', 'metno', 'dmi_seamless']
+
     fig = go.Figure()
+
+    # Add traces; show trace if its name is in default_cols
     for col in y_cols:
-        fig.add_trace(go.Scatter(x=df.index, y=df[col],
-                                mode='lines', name=col, visible=False))
+        fig.add_trace(go.Scatter(
+            x=df.index,
+            y=df[col],
+            mode='lines',
+            name=col,
+            visible=(col in default_cols)
+        ))
 
-    # Multi-select widget
-    selector = widgets.SelectMultiple(options=y_cols, value=[y_cols[0]], description='Lines:')
-    display(selector)
+    buttons = []
 
-    def update_figure(change):
-        selected = change['new']
-        for trace in fig.data:
-            trace.visible = trace.name in selected
-        fig.show()
+    # Button to reset to default (actual, metno, dmi_seamless)
+    default_visible = [col in default_cols for col in y_cols]
+    buttons.append(dict(method='update',
+                        label='Default',
+                        args=[{'visible': default_visible},
+                            {'title': 'Default: actual, metno, dmi_seamless'}]))
 
-    selector.observe(update_figure, names='value')
-    update_figure({'new': selector.value})
-    st.plotly_chart(fig)
+    # Buttons for individual column selection
+    for i, col in enumerate(y_cols):
+        visible = [False] * len(y_cols)
+        visible[i] = True
+        buttons.append(dict(method='update',
+                            label=col,
+                            args=[{'visible': visible},
+                                {'title': f"Line Plot: {col}"}]))
+
+    fig.update_layout(
+        updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
+    )
+    st.plotly_chart
 
 
     def mean_pinball_loss(actual, forecast, alpha=0.5):
