@@ -454,6 +454,7 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     end = start + pd.Timedelta(days=1)
     start = start.strftime('%Y-%m-%d')
     end = end.strftime('%Y-%m-%d')
+    start = end
     # url = (
     #     f"https://griddata.elia.be/eliabecontrols.prod/interface/fdn/download/"
     #     f"windweekly/currentselection?dtFrom={start}&dtTo={end}&regionId=1&"
@@ -491,7 +492,7 @@ def benchmark():
     latest_actual = get_latest_wind_offshore(selected_date)
 
     l=[]
-    for model in ['metno','dmi_seamless','meteofrance','icon','knmi']:
+    for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}")
             sel = get_latest_da_fcst_file(selected_date,files)
@@ -513,23 +514,26 @@ def benchmark():
         rmse = np.sqrt(np.mean(error**2))
         mae  = np.mean(np.abs(error))
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
-        return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae, f'{col}_Pinball': pinball})
+        return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
     scores = (
         df.groupby(df.index.date)
         .apply(lambda grp: pd.concat([
             compute_scores(grp, 'metno_0.5'),
             compute_scores(grp, 'meteofrance_0.5'),
-            # compute_scores(grp, 'hybrid'),
+            compute_scores(grp, 'avg'),
             compute_scores(grp, 'icon_0.5'),
             compute_scores(grp, 'knmi_0.5'),
             compute_scores(grp, 'dmi_seamless_0.5'),
             # compute_scores(grp, 'submission_0.5')
         ]))
     )
+    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().sort_values()
+    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().sort_values()
 
 
-    st.dataframe(scores)
+    st.dataframe(rmse)
+    st.dataframe(mae)
 
 
 
