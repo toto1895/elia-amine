@@ -441,7 +441,7 @@ def benchmark():
     file_date = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
     file_path = f"gs:oracle_predictions/predico-elia/forecasts/metno/{file_date}_09_56_16_metno.parquet"
     
-    df = conn.read(f, input_format="parquet", ttl=0)
+    df = conn.read(file_path, input_format="parquet", ttl=0)
 
     try:
         st.success("Data loaded successfully!")
