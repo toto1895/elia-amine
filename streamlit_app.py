@@ -499,7 +499,7 @@ def benchmark():
     df.index = pd.to_datetime(df.index)
     df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1).dropna()
 
-    df = df[selected_date+pd.Timedelta(days=1):]
+    df = df[selected_date.tz_localize('CET')+pd.Timedelta(days=1):]
 
     def mean_pinball_loss(actual, forecast, alpha=0.5):
         return np.mean(np.maximum(alpha*(actual - forecast), (alpha-1)*(actual - forecast)))
