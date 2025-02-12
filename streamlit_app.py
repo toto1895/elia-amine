@@ -494,7 +494,7 @@ def benchmark():
             df = conn.read(sel, input_format="parquet", ttl=600)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
             l.append(df)
         except Exception as e:
-            print(2)
+            print(e)
     
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
