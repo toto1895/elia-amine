@@ -461,6 +461,7 @@ def benchmark():
         try:
             files = conn._instance.ls("oracle_predictions/predico-elia/forecasts/{model}")
             sel = get_latest_da_fcst_file(selected_date,files)
+            print(sel)
             df = conn.read(sel, input_format="parquet", ttl=0)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
             l.append(df)
         except:
