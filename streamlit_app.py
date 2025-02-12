@@ -443,11 +443,8 @@ def get_latest_da_fcst_file(selected_date,files):
         hour = basename[3] 
         
         if (date_part == selected_str) and (int(hour) < 10):
-            print(date_part)
-            print(selected_date)
-            print(int(hour))
             files_time.append(f)
-            
+
     if  len(files_time)==0:
         #st.warning("No files found for the selected date before 10:00.")
         return
@@ -482,7 +479,7 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
 def benchmark():
     st.title("Benchmark Models")
     
-    
+
     selected_date = st.date_input("Submission date", pd.to_datetime("today"))
 
     latest_actual = get_latest_wind_offshore(selected_date)
@@ -492,7 +489,6 @@ def benchmark():
         try:
             conn = st.connection('gcs', type=FilesConnection)
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
-            print(files)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
             df = conn.read(sel, input_format="parquet", ttl=0)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
