@@ -437,6 +437,7 @@ def get_latest_da_fcst_file(selected_date,files):
     pattern = r"(\d{4}_\d{2}_\d{2})_(\d{2})_(\d{2})_metno\.parquet"
     files_time = []
     for f in files:
+        print(f)
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1]
