@@ -490,7 +490,6 @@ def benchmark():
             
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
             sel = get_latest_da_fcst_file(selected_date,files)
-            print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
             try:
                 df = df[[0.1,0.5,0.9]]
@@ -506,6 +505,32 @@ def benchmark():
     df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1).dropna()
 
     df = df.iloc[-96:].copy()
+
+    y_cols = df.columns
+
+    fig = go.Figure()
+
+    # Add traces; only the first trace is visible initially.
+    for i, col in enumerate(y_cols):
+        fig.add_trace(go.Scatter(x=df.index, y=df[col],
+                                mode='lines', name=col,
+                                visible=(i == 0)))
+
+    # Create dropdown buttons.
+    buttons = []
+    for i, col in enumerate(y_cols):
+        visible = [False] * len(y_cols)
+        visible[i] = True
+        buttons.append(dict(method='update',
+                            label=col,
+                            args=[{'visible': visible},
+                                {'title': f"Line Plot: {col}"}]))
+
+    fig.update_layout(
+        updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
+    )
+    st.plotly_chart(fig)
+
 
     def mean_pinball_loss(actual, forecast, alpha=0.5):
         return np.mean(np.maximum(alpha*(actual - forecast), (alpha-1)*(actual - forecast)))
