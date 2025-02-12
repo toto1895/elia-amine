@@ -486,7 +486,8 @@ def benchmark():
     l=[]
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
-            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}")
+            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}",max_results=50)
+            print(files)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
             df = conn.read(sel, input_format="parquet", ttl=0)[[0.1,0.5,0.9]].add_prefix(f'{model}_')
@@ -516,7 +517,7 @@ def benchmark():
     scores = df.groupby(df.index.date).apply(
     lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
     )
-    
+
     rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
     mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
 
