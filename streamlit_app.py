@@ -572,7 +572,7 @@ def benchmark():
     st.dataframe(rmse.T.tail(1))
     st.dataframe(mae.T.tail(1))
 
-    st.dataframe(df)
+    #st.dataframe(df)
 
 
 
