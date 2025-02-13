@@ -516,7 +516,8 @@ def benchmark():
     'avg_0.5': "rgb(5, 222, 255)",
     'metno_0.5': 'red',
     'dmi_seamless_0.5': 'green',
-    'meteofrance_0.5': 'purple'
+    'meteofrance_0.5': 'purple',
+    'knmi_0.5':'grey',
     }
     fig = go.Figure()
 
