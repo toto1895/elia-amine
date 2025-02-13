@@ -510,7 +510,13 @@ def benchmark():
 
     # Define default columns to always show
     default_cols = ['actual', 'avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5']
-
+    color_map = {
+    'actual': 'white',
+    'avg_0.5': "rgb(5, 222, 255)",
+    'metno_0.5': 'red',
+    'dmi_seamless_0.5': 'orange',
+    'meteofrance_0.5': 'purple'
+    }
     fig = go.Figure()
 
     # Add all traces; set visible True if trace name is in default_cols
@@ -521,7 +527,8 @@ def benchmark():
                 y=df[col],
                 mode='lines',
                 name=col,
-                visible=(col in default_cols)
+                visible=(col in default_cols),
+                line_color=color_map[col]
             ))
         except:
             pass
