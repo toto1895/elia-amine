@@ -512,9 +512,10 @@ def benchmark():
     default_cols = ['actual', 'avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5']
     color_map = {
     'actual': 'white',
+    'DA elia (11AM)':'orange',
     'avg_0.5': "rgb(5, 222, 255)",
     'metno_0.5': 'red',
-    'dmi_seamless_0.5': 'orange',
+    'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple'
     }
     fig = go.Figure()
