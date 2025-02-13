@@ -525,6 +525,14 @@ def benchmark():
             ))
         except:
             pass
+    fig.update_layout(
+        xaxis_title="Datetime",
+        yaxis_title="MW",
+        yaxis=dict(range=[0, 2300]),
+        template="plotly_dark",  # Optional: in dark mode to let white stand out
+       # showlegend=False
+    )
+
 
     st.plotly_chart(fig)
 
