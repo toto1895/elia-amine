@@ -508,11 +508,12 @@ def benchmark():
 
     y_cols = df.columns
 
-    default_cols = ['actual', 'metno', 'dmi_seamless']
+    # Define default columns to always show
+    default_cols = ['actual', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5']
 
     fig = go.Figure()
 
-    # Add traces; show trace if its name is in default_cols
+    # Add all traces; set visible True if trace name is in default_cols
     for col in y_cols:
         fig.add_trace(go.Scatter(
             x=df.index,
@@ -524,25 +525,30 @@ def benchmark():
 
     buttons = []
 
-    # Button to reset to default (actual, metno, dmi_seamless)
+    # Button to reset view to default columns
     default_visible = [col in default_cols for col in y_cols]
-    buttons.append(dict(method='update',
-                        label='Default',
-                        args=[{'visible': default_visible},
-                            {'title': 'Default: actual, metno, dmi_seamless'}]))
+    buttons.append(dict(
+        method='update',
+        label='Default',
+        args=[{'visible': default_visible},
+            {'title': 'Default: ' + ', '.join(default_cols)}]
+    ))
 
-    # Buttons for individual column selection
+    # Buttons to show individual columns
     for i, col in enumerate(y_cols):
         visible = [False] * len(y_cols)
         visible[i] = True
-        buttons.append(dict(method='update',
-                            label=col,
-                            args=[{'visible': visible},
-                                {'title': f"Line Plot: {col}"}]))
+        buttons.append(dict(
+            method='update',
+            label=col,
+            args=[{'visible': visible},
+                {'title': f"Line Plot: {col}"}]
+        ))
 
     fig.update_layout(
         updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
     )
+
     st.plotly_chart(fig)
 
 
