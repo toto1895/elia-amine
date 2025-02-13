@@ -528,7 +528,8 @@ def benchmark():
                 mode='lines',
                 name=col,
                 visible=(col in default_cols),
-                line_color=color_map[col]
+                line_color=color_map[col],
+                showlegend=False
             ))
         except:
             pass
