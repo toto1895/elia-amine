@@ -515,39 +515,16 @@ def benchmark():
 
     # Add all traces; set visible True if trace name is in default_cols
     for col in y_cols:
-        fig.add_trace(go.Scatter(
-            x=df.index,
-            y=df[col],
-            mode='lines',
-            name=col,
-            visible=(col in default_cols)
-        ))
-
-    buttons = []
-
-    # Button to reset view to default columns
-    default_visible = [col in default_cols for col in y_cols]
-    buttons.append(dict(
-        method='update',
-        label='Default',
-        args=[{'visible': default_visible},
-            {'title': 'Default: ' + ', '.join(default_cols)}]
-    ))
-
-    # Buttons to show individual columns
-    for i, col in enumerate(y_cols):
-        visible = [False] * len(y_cols)
-        visible[i] = True
-        buttons.append(dict(
-            method='update',
-            label=col,
-            args=[{'visible': visible},
-                {'title': f"Line Plot: {col}"}]
-        ))
-
-    fig.update_layout(
-        updatemenus=[dict(active=0, buttons=buttons, x=1.1, y=1)]
-    )
+        try:
+            fig.add_trace(go.Scatter(
+                x=df.index,
+                y=df[col],
+                mode='lines',
+                name=col,
+                visible=(col in default_cols)
+            ))
+        except:
+            pass
 
     st.plotly_chart(fig)
 
