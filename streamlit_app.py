@@ -509,7 +509,7 @@ def benchmark():
     y_cols = df.columns
 
     # Define default columns to always show
-    default_cols = ['actual', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5']
+    default_cols = ['actual', 'avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5']
 
     fig = go.Figure()
 
