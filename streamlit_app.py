@@ -481,7 +481,7 @@ def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
 
-    selected_date = st.date_input("Submission date", pd.to_datetime("today")-pd.Timedelta(days=1))
+    selected_date = st.date_input("Submission date", pd.to_datetime("today"))
 
     latest_actual = get_latest_wind_offshore(selected_date)
 
