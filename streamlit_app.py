@@ -561,17 +561,20 @@ def benchmark():
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5'
         ]
-    df =df.dropna()
-    scores = df.groupby(df.index.date).apply(
-    lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
-    )
+    try:
+        df =df.dropna()
+        scores = df.groupby(df.index.date).apply(
+        lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
+        )
 
-    rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
-    mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
+        rmse =scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
+        mae =scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
 
 
-    st.dataframe(rmse.T.tail(1))
-    st.dataframe(mae.T.tail(1))
+        st.dataframe(rmse.T.tail(1))
+        st.dataframe(mae.T.tail(1))
+    except:
+        pass
 
     #st.dataframe(df)
 
