@@ -509,10 +509,10 @@ def benchmark():
                 all_files.extend(files)  # extend() flattens the list if files is a list
                 if not token:
                     break
-            flattened_files = [item for sublist in all_files for item in sublist]
+            #flattened_files = [item for sublist in all_files for item in sublist]
 
-            sel = get_latest_da_fcst_file(selected_date,flattened_files)
-            print(len(flattened_files))
+            sel = get_latest_da_fcst_file(selected_date,all_files)
+            print(len(all_files))
             df = conn.read(sel, input_format="parquet", ttl=600)
             try:
                 df = df[[0.1,0.5,0.9]]
