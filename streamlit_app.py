@@ -499,7 +499,8 @@ def benchmark():
                 response = conn._instance.ls(
                     f"oracle_predictions/predico-elia/forecasts/{model}",
                     max_results=100,
-                    page_token=token
+                    page_token=token,
+                    ttl=0
                 )
                 files = response.get('files', [])  # adjust based on response structure
                 token = response.get('next_token')
