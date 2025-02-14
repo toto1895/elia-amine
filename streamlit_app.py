@@ -512,7 +512,7 @@ def benchmark():
             #flattened_files = [item for sublist in all_files for item in sublist]
 
             sel = get_latest_da_fcst_file(selected_date,all_files)
-            print(all_files)
+            print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
             try:
                 df = df[[0.1,0.5,0.9]]
