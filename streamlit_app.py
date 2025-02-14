@@ -490,6 +490,7 @@ def benchmark():
             
             files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
             sel = get_latest_da_fcst_file(selected_date,files)
+            print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
             try:
                 df = df[[0.1,0.5,0.9]]
