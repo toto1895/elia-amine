@@ -480,11 +480,6 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
 def benchmark():
     from st_files_connection import FilesConnection
 
-    from google.cloud import storage
-
-    client = storage.Client()
-    for blob in client.list_blobs('oracle_predictions', prefix='predico-elia/forecasts/metno'):
-        print(str(blob))
 
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
