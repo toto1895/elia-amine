@@ -480,6 +480,12 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
 def benchmark():
     from st_files_connection import FilesConnection
 
+    from google.cloud import storage
+
+    client = storage.Client()
+    for blob in client.list_blobs('oracle_predictions', prefix='predico-elia/forecasts/metno'):
+        print(str(blob))
+
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
 
@@ -492,6 +498,8 @@ def benchmark():
         try:
             
             #files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=30)
+            
+
             all_files = []
             token = None
             while True:
@@ -511,8 +519,9 @@ def benchmark():
                 all_files.extend(files)  # extend() flattens the list if files is a list
                 if not token:
                     break
+
             sel = get_latest_da_fcst_file(selected_date,all_files)
-            print(sel)
+            #print(sel)
             df = conn.read(sel, input_format="parquet")
             try:
                 df = df[[0.1,0.5,0.9]]
