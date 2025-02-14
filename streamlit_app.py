@@ -502,7 +502,7 @@ def benchmark():
     
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
-    df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1).dropna()
+    df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1)
 
     df = df.iloc[-96:].copy()
 
@@ -561,7 +561,7 @@ def benchmark():
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5'
         ]
-
+    df =df.dropna()
     scores = df.groupby(df.index.date).apply(
     lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
     )
