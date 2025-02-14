@@ -493,12 +493,20 @@ def benchmark():
             all_files = []
             token = None
             while True:
-                files, token = conn._instance.ls(
+                res = conn._instance.ls(
                     f"oracle_predictions/predico-elia/forecasts/{model}",
                     max_results=100,
                     page_token=token
                 )
-                all_files.extend(files)
+                # If ls returns a tuple, take the first two elements; otherwise, treat it as files only.
+                if isinstance(res, tuple):
+                    files = res[0]
+                    token = res[1] if len(res) > 1 else None
+                else:
+                    files = res
+                    token = None
+
+                all_files.extend(files)  # extend() flattens the list if files is a list
                 if not token:
                     break
             flattened_files = [item for sublist in all_files for item in sublist]
