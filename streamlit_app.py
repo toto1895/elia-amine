@@ -258,8 +258,6 @@ def calculate_mase(actual, predicted, training_actual=None):
 
 def submission_viewer():
     st.subheader("Submission Viewer")
-    if st.button("Restart App"):
-        os.execl(sys.executable, sys.executable, *sys.argv)
 
     # 1. Authenticate & get submissions
     api = get_api()
