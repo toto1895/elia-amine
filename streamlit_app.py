@@ -495,7 +495,7 @@ def benchmark():
             while True:
                 res = conn._instance.ls(
                     f"oracle_predictions/predico-elia/forecasts/{model}",
-                    max_results=100,
+                    #max_results=100,
                     page_token=token
                 )
                 # If ls returns a tuple, take the first two elements; otherwise, treat it as files only.
