@@ -6,7 +6,6 @@ from predico import PredicoAPI
 import downloader
 import os
 import numpy as np 
-from st_files_connection import FilesConnection
 
 
 st.set_page_config(
@@ -479,6 +478,8 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     return d.rename(columns={'actual elia':'actual'})
 
 def benchmark():
+    from st_files_connection import FilesConnection
+
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
 
