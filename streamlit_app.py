@@ -441,6 +441,7 @@ def get_latest_da_fcst_file(selected_date,files):
         basename = f.split("/")[-1].split('_')
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
+        print(selected_str,date_part)
         
         if (date_part == selected_str) and (int(hour) < 10):
 
@@ -518,11 +519,9 @@ def benchmark():
                 df = df[[0.1,0.5,0.9]]
             except:
                 df = df[['0.1','0.5','0.9']]
-            try:
-                df.columns = [0.1,0.5,0.9]
-                l.append(df.add_prefix(f'{model}_'))
-            except:
-                pass
+            df.columns = [0.1,0.5,0.9]
+            l.append(df.add_prefix(f'{model}_'))
+
         except Exception as e:
             print(e)
     
