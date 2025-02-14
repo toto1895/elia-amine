@@ -258,6 +258,8 @@ def calculate_mase(actual, predicted, training_actual=None):
 
 def submission_viewer():
     st.subheader("Submission Viewer")
+    if st.button("Restart App"):
+        os.execl(sys.executable, sys.executable, *sys.argv)
 
     # 1. Authenticate & get submissions
     api = get_api()
@@ -440,7 +442,6 @@ def get_latest_da_fcst_file(selected_date,files):
         basename = f.split("/")[-1].split('_')
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
-        print(selected_str,date_part)
         
         if (date_part == selected_str) and (int(hour) < 10):
 
@@ -526,8 +527,7 @@ def benchmark():
             l.append(df.add_prefix(f'{model}_'))
 
         except Exception as e:
-            print(e)
-    
+            pass    
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
     try:
@@ -657,8 +657,7 @@ def main():
     elif page_choice == 'Benchmark':
         benchmark()
 
-    if st.button("Restart App"):
-        os.execl(sys.executable, sys.executable, *sys.argv)
+    
         
 
 if __name__ == "__main__":
