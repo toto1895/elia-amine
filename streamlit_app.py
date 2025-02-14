@@ -489,9 +489,21 @@ def benchmark():
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
             
-            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}_{selected_date.strftime('%Y_%m_%d')}", max_results=30)
-            sel = get_latest_da_fcst_file(selected_date,files)
-            print(files)
+            #files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=30)
+            all_files = []
+            token = None
+            while True:
+                files, token = conn._instance.ls(
+                    f"oracle_predictions/predico-elia/forecasts/{model}",
+                    max_results=100,
+                    page_token=token
+                )
+                all_files.extend(files)
+                if not token:
+                    break
+
+            sel = get_latest_da_fcst_file(selected_date,all_files)
+            print(len(all_files))
             df = conn.read(sel, input_format="parquet", ttl=600)
             try:
                 df = df[[0.1,0.5,0.9]]
