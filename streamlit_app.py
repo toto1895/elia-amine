@@ -644,6 +644,8 @@ def overview():
     st.dataframe(data.sort_values(by='market_date', ascending=False).drop(columns='variable'))
     
 
+import os, sys
+
 # ---------------- Main App with Navigation ----------------
 def main():
     st.sidebar.title("Navigation")
@@ -654,6 +656,9 @@ def main():
         overview()
     elif page_choice == 'Benchmark':
         benchmark()
+
+    if st.button("Restart App"):
+        os.execl(sys.executable, sys.executable, *sys.argv)
         
 
 if __name__ == "__main__":
