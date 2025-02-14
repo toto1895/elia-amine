@@ -495,8 +495,11 @@ def benchmark():
                 df = df[[0.1,0.5,0.9]]
             except:
                 df = df[['0.1','0.5','0.9']]
-            df.columns = [0.1,0.5,0.9]
-            l.append(df.add_prefix(f'{model}_'))
+            try:
+                df.columns = [0.1,0.5,0.9]
+                l.append(df.add_prefix(f'{model}_'))
+            except:
+                pass
         except Exception as e:
             print(e)
     
