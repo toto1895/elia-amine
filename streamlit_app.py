@@ -490,7 +490,7 @@ def benchmark():
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
             
-            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=500)
+            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}_{selected_date.strftime('%Y_%m')}", max_results=30)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
