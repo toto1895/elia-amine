@@ -439,7 +439,6 @@ def get_latest_da_fcst_file(selected_date,files):
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1].split('_')
-        print(basename)
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
         
@@ -490,7 +489,7 @@ def benchmark():
     for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
         try:
             
-            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}_{selected_date.strftime('%Y_%m')}", max_results=30)
+            files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}_{selected_date.strftime('%Y_%m_%d')}", max_results=30)
             sel = get_latest_da_fcst_file(selected_date,files)
             print(sel)
             df = conn.read(sel, input_format="parquet", ttl=600)
