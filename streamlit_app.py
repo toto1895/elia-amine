@@ -502,14 +502,20 @@ def benchmark():
     
     df = pd.concat(l,axis=1)
     df.index = pd.to_datetime(df.index)
-    df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1)
+    try:
+        df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1)
+        default_cols = ['actual', 'DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
+
+    except:
+        default_cols = ['DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
+
+        pass
 
     df = df.iloc[-96:].copy()
 
     y_cols = df.columns
 
     # Define default columns to always show
-    default_cols = ['actual', 'DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
     color_map = {
     'actual': 'white',
     'DA elia (11AM)':'orange',
