@@ -439,10 +439,12 @@ def get_latest_da_fcst_file(selected_date,files):
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1].split('_')
+        print(basename)
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
         
         if (date_part == selected_str) and (int(hour) < 10):
+
             files_time.append(f)
 
     if  len(files_time)==0:
