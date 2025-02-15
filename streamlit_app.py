@@ -477,6 +477,11 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
     return d.rename(columns={'actual elia':'actual'})
 
 def benchmark():
+    if st.button("Clear Cache"):
+        st.experimental_memo.clear()  # if using memo caching
+        st.experimental_singleton.clear()  # if using singleton caching
+        st.write("Cache cleared!")
+
     from st_files_connection import FilesConnection
 
 
