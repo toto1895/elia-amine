@@ -478,8 +478,7 @@ def get_latest_wind_offshore(start) -> pd.DataFrame:
 
 def benchmark():
     if st.button("Clear Cache"):
-        st.experimental_memo.clear()  # if using memo caching
-        st.experimental_singleton.clear()  # if using singleton caching
+        st.cache_resource.clear()
         st.write("Cache cleared!")
 
     from st_files_connection import FilesConnection
