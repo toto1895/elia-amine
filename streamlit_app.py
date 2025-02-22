@@ -650,23 +650,30 @@ def overview():
     
 
 import os, sys
+import json
 
 # ---------------- Main App with Navigation ----------------
 def main():
     st.sidebar.title("Navigation")
     if st.button("Generate forecast"):
+        from google.oauth2 import service_account
+
+        # Load credentials from Streamlit secrets
+        service_account_info = json.loads(st.secrets["connections.gcs"]["service_account_json"])
+        credentials = service_account.Credentials.from_service_account_info(service_account_info)
+
+        # Initialize the Cloud Run Jobs client
+        client = run_v2.JobsClient(credentials=credentials)
         
         project_id = "gridalert-c48ee"
         region = "europe-west6"
         job_name = "generate-forecast"
-        
-        # Initialize the client with credentials
-        client = run_v2.JobsClient()
+
         # Run the job
         response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/{job_name}")
         print(response)
         st.write(response)
-        
+
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview",'Benchmark'])
     if page_choice == "Submission Viewer":
         submission_viewer()
