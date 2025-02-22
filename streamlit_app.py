@@ -33,7 +33,7 @@ st.markdown(
 user_env = os.getenv("USER") 
 pwd_env = os.getenv("PWD")
 pwd_view = os.getenv("PWD_VIEW")
-
+GCLOUD = os.getenv("service_account_json")
 
 # !!!!!!!!!!!!!!!!!!
 
@@ -659,7 +659,7 @@ def main():
     if st.button("Generate forecast"):
 
         # Load credentials from Streamlit secrets
-        service_account_info = json.loads(st.secrets["gcp"]["service_account_json"])
+        service_account_info = json.loads(GCLOUD)
         credentials = service_account.Credentials.from_service_account_info(service_account_info)
 
         # Initialize the Cloud Run Jobs client
