@@ -593,9 +593,9 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = [
+    cols = ['DA elia (11AM)',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
-    'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5'
+    'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
     try:
         df =df.dropna()
