@@ -672,7 +672,7 @@ def main():
         # Run the job
         response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/{job_name}")
         print(response)
-        st.write(response)
+        st.write('Forecast job submitted', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
 
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview",'Benchmark'])
     if page_choice == "Submission Viewer":
