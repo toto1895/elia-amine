@@ -543,6 +543,11 @@ def benchmark():
 
     df = df.iloc[-96:].copy()
 
+    cols_to_compare = ['avg_0.5', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+
+    df['hyb1'] = df[cols_to_compare].apply(lambda row: row.loc[(row - df['DA elia (11AM)']).abs().idxmin()], axis=1)
+
+
     y_cols = df.columns
 
     # Define default columns to always show
@@ -554,6 +559,7 @@ def benchmark():
     'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple',
     'knmi_0.5':'grey',
+    'hyb1':'yellow'
     }
     fig = go.Figure()
 
@@ -593,7 +599,7 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = ['DA elia (11AM)',
+    cols = ['DA elia (11AM)','hyb1',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
