@@ -651,15 +651,15 @@ def overview():
 
 import os, sys
 import json
+from google.oauth2 import service_account
 
 # ---------------- Main App with Navigation ----------------
 def main():
     st.sidebar.title("Navigation")
     if st.button("Generate forecast"):
-        from google.oauth2 import service_account
 
         # Load credentials from Streamlit secrets
-        service_account_info = json.loads(st.secrets["connections.gcs"]["service_account_json"])
+        service_account_info = json.loads(st.secrets["gcp"]["service_account_json"])
         credentials = service_account.Credentials.from_service_account_info(service_account_info)
 
         # Initialize the Cloud Run Jobs client
