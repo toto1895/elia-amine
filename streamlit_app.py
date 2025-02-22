@@ -545,8 +545,17 @@ def benchmark():
 
     cols_to_compare = ['avg_0.5', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
 
-    df['hyb1'] = df[cols_to_compare].apply(lambda row: row.loc[(row - df['DA elia (11AM)']).abs().idxmin()], axis=1)
-    print(df['hyb1'])
+    def select_min_error(row):
+        da_value = row['DA elia (11AM)']
+        if pd.isna(da_value):
+            return None  # If DA elia is NaN, return NaN
+        valid_values = row[cols_to_compare].dropna()  # Drop NaNs before calculating
+        if valid_values.empty:
+            return None  # If all comparison values are NaN, return NaN
+        return valid_values.loc[(valid_values - da_value).abs().idxmin()]
+
+    # Apply function to each row
+    df['hyb1'] = df.apply(select_min_error, axis=1)
 
     y_cols = df.columns
 
