@@ -557,12 +557,12 @@ def benchmark():
     # Apply function to each row
     df['hyb1'] = df.apply(select_min_error, axis=1)
 
-
     error_sums = df[cols_to_compare].subtract(df['DA elia (11AM)'], axis=0).abs().sum()
-    # Select the column with the smallest overall error
     best_column = error_sums.idxmin()
-    # Create a new column that takes values from the best-performing column
-    df['hyb2'] = df[best_column]
+    df['hyb_top1'] = df[best_column]
+
+    top2_columns = error_sums.nsmallest(2).index.tolist()
+    df['hyb_top2'] = df[top2_columns].mean(axis=1)
 
     y_cols = df.columns
 
@@ -576,8 +576,8 @@ def benchmark():
     'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple',
     'knmi_0.5':'grey',
-    'hyb1':'yellow',
-    'hyb2':'rgb(170, 17, 217)'
+    #'hyb1':'yellow',
+    #'hyb2':'rgb(170, 17, 217)'
     }
     fig = go.Figure()
 
@@ -617,7 +617,7 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = ['DA elia (11AM)','hyb1','hyb2',
+    cols = ['DA elia (11AM)','hyb1','hyb_top1','hyb_top2',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
