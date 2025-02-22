@@ -559,7 +559,7 @@ def benchmark():
 
     y_cols = df.columns
 
-    default_cols = ['DA elia (11AM)','hyb1','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
+    default_cols = ['actual','DA elia (11AM)','hyb1','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
     # Define default columns to always show
     color_map = {
     'actual': 'white',
