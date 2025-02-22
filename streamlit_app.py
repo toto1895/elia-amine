@@ -640,6 +640,23 @@ def overview():
 
     # If authenticated, proceed with the overview logic
     st.title("Ranking & PnL")
+    if st.button("Generate forecast"):
+        from google.cloud import run_v2
+        import os
+        from google.oauth2 import service_account
+
+        client = run_v2.JobsClient()
+        project_id = "gridalert-c48ee"
+        region = "europe-west6"
+        job_name = "generate-forecast"
+        
+        # Initialize the client with credentials
+        client = run_v2.JobsClient()
+        # Run the job
+        response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/{job_name}")
+        print(response)
+        st.write(response)
+
     api = get_api()
     data = fetch_last_50_scores(api)
     st.plotly_chart(plot_rank_and_payout_separate(data))
