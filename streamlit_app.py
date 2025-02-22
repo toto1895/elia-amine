@@ -546,7 +546,7 @@ def benchmark():
     cols_to_compare = ['avg_0.5', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
 
     df['hyb1'] = df[cols_to_compare].apply(lambda row: row.loc[(row - df['DA elia (11AM)']).abs().idxmin()], axis=1)
-
+    print(df['hyb1'])
 
     y_cols = df.columns
 
@@ -559,7 +559,7 @@ def benchmark():
     'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple',
     'knmi_0.5':'grey',
-    'hyb1':'yellow'
+    'hyb1':'yellow',
     }
     fig = go.Figure()
 
