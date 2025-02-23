@@ -492,7 +492,7 @@ def benchmark():
     latest_actual = get_latest_wind_offshore(selected_date)
 
     l=[]
-    for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi']:
+    for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi', 'oracle']:
         try:
             
             #files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=30)
@@ -534,7 +534,7 @@ def benchmark():
     df.index = pd.to_datetime(df.index)
     try:
         df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1)
-        default_cols = ['actual', 'DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
+        default_cols = ['actual', 'DA elia (11AM)','oracle_0.5','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
 
     except:
         default_cols = ['DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
@@ -543,7 +543,7 @@ def benchmark():
 
     df = df.iloc[-96:].copy()
 
-    cols_to_compare = ['meteofrance_0.9','avg_0.5', 'metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+    cols_to_compare = ['meteofrance_0.9','avg_0.5', 'oracle_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
 
     def select_min_error(row):
         da_value = row['DA elia (11AM)']
@@ -555,18 +555,18 @@ def benchmark():
         return valid_values.loc[(valid_values - da_value).abs().idxmin()]
 
     # Apply function to each row
-    df['hyb1'] = df.apply(select_min_error, axis=1)
+    #df['hyb1'] = df.apply(select_min_error, axis=1)
 
-    error_sums = df[cols_to_compare].subtract(df['DA elia (11AM)'], axis=0).abs().sum()
-    best_column = error_sums.idxmin()
-    df['hyb_top1'] = df[best_column]
+    #error_sums = df[cols_to_compare].subtract(df['DA elia (11AM)'], axis=0).abs().sum()
+    #best_column = error_sums.idxmin()
+    #df['hyb_top1'] = df[best_column]
 
-    top2_columns = error_sums.nsmallest(2).index.tolist()
-    df['hyb_top2'] = df[['hyb1','DA elia (11AM)']].mean(axis=1)
+    #top2_columns = error_sums.nsmallest(2).index.tolist()
+    #df['hyb_top2'] = df[['hyb1','DA elia (11AM)']].mean(axis=1)
 
     y_cols = df.columns
 
-    default_cols = ['actual','DA elia (11AM)','hyb2','hyb1','meteofrance_0.9','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
+    default_cols = ['actual','DA elia (11AM)','oracle_0.5','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
     # Define default columns to always show
     color_map = {
     'actual': 'white',
@@ -576,7 +576,7 @@ def benchmark():
     'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple',
     'knmi_0.5':'grey',
-    'meteofrance_0.9':'yellow',
+    'oracle_0.5':'yellow',
     #'hyb2':'rgb(170, 17, 217)'
     }
     fig = go.Figure()
@@ -617,7 +617,7 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = ['DA elia (11AM)','meteofrance_0.9','hyb1','hyb_top1','hyb_top2',
+    cols = ['DA elia (11AM)','oracle_0.5',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
