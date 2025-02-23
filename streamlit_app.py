@@ -562,7 +562,7 @@ def benchmark():
     df['hyb_top1'] = df[best_column]
 
     top2_columns = error_sums.nsmallest(2).index.tolist()
-    df['hyb_top2'] = df[top2_columns].mean(axis=1)
+    df['hyb_top2'] = df[['hyb_top1','DA elia (11AM)']].mean(axis=1)
 
     y_cols = df.columns
 
