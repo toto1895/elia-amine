@@ -694,6 +694,18 @@ def main():
         response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/{job_name}")
         print(response)
         st.write('Forecast job submitted', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
+        
+        import time
+        time.sleep(100)
+        st.write('Preparing to generate oracle ...', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
+
+        job_name = "submit-oracle"
+
+        # Run the job
+        response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/{job_name}")
+        print(response)
+        st.write('Oracle submitted', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
+
 
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview",'Benchmark'])
     if page_choice == "Submission Viewer":
