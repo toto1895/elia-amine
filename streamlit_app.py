@@ -492,12 +492,9 @@ def benchmark():
     latest_actual = get_latest_wind_offshore(selected_date)
 
     l=[]
-    for model in ['avg','metno','dmi_seamless','meteofrance','icon','knmi', 'oracle']:
+    for model in ['avg','oracle','metno','dmi_seamless','meteofrance','icon','knmi', 'oracle']:
         try:
-            
             #files = conn._instance.ls(f"oracle_predictions/predico-elia/forecasts/{model}", max_results=30)
-            
-
             all_files = []
             token = None
             while True:
@@ -537,7 +534,7 @@ def benchmark():
         default_cols = ['actual', 'DA elia (11AM)','oracle_0.5','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
 
     except:
-        default_cols = ['DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
+        default_cols = ['DA elia (11AM)','oracle_0.5','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
 
         pass
 
