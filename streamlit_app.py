@@ -531,16 +531,16 @@ def benchmark():
     df.index = pd.to_datetime(df.index)
     try:
         df = pd.concat([latest_actual.drop(columns='Datetime'),df],axis=1)
-        default_cols = ['actual', 'DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
+        default_cols = ['actual', 'DA elia (11AM)','avg_0.5','icon_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
 
     except:
-        default_cols = ['DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
+        default_cols = ['DA elia (11AM)','avg_0.5','icon_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5', 'meteofrance_0.9']
 
         pass
 
     df = df.iloc[-96:].copy()
 
-    cols_to_compare = ['meteofrance_0.9','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+    cols_to_compare = ['meteofrance_0.9','avg_0.5','icon_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
 
     def select_min_error(row):
         da_value = row['DA elia (11AM)']
@@ -573,7 +573,7 @@ def benchmark():
     'dmi_seamless_0.5': 'green',
     'meteofrance_0.5': 'purple',
     'knmi_0.5':'grey',
-    #'oracle_0.5':'yellow',
+    'icon_0.5':'yellow',
     #'hyb2':'rgb(170, 17, 217)'
     }
     fig = go.Figure()
@@ -614,7 +614,7 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = ['DA elia (11AM)',
+    cols = ['DA elia (11AM)','icon_0.5',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
