@@ -563,7 +563,7 @@ def benchmark():
 
     y_cols = df.columns
 
-    default_cols = ['actual','DA elia (11AM)','avg_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
+    default_cols = ['actual','DA elia (11AM)','avg_0.5','icon_0.5','metno_0.5', 'dmi_seamless_0.5', 'meteofrance_0.5','knmi_0.5']
     # Define default columns to always show
     color_map = {
     'actual': 'white',
@@ -614,7 +614,7 @@ def benchmark():
         pinball = mean_pinball_loss(group.actual, group[col], alpha=0.5)
         return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
 
-    cols = ['DA elia (11AM)','icon_0.5',
+    cols = ['DA elia (11AM)',
     'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
     'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
         ]
