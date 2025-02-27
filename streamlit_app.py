@@ -523,7 +523,8 @@ def benchmark():
             except:
                 df = df[['0.1','0.5','0.9']]
             df.columns = [0.1,0.5,0.9]
-            l.append(df.add_prefix(f'{model}_'))
+            if not df.empty:
+                l.append(df.add_prefix(f'{model}_'))
 
         except Exception as e:
             print(e)
