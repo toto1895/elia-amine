@@ -518,6 +518,7 @@ def benchmark():
             sel = get_latest_da_fcst_file(selected_date,all_files)
             #print(sel)
             df = conn.read(sel, input_format="parquet")
+            print(sel)
             try:
                 df = df[[0.1,0.5,0.9]]
             except:
