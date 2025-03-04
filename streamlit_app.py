@@ -441,7 +441,7 @@ def benchmark():
     latest_actual = get_latest_wind_offshore(selected_date)
 
     # Fetch model forecasts
-    models = ['avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+    models = ['oracle','avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
     forecasts = []
     
     for model in models:
@@ -492,7 +492,7 @@ def benchmark():
         
         try:
             df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
-            default_cols = ['actual', 'DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
+            default_cols = ['actual', 'DA elia (11AM)', 'oracle_0.5','avg_0.5', 'icon_0.5', 'metno_0.5', 
                             'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
         except:
             default_cols = ['DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
@@ -511,6 +511,7 @@ def benchmark():
             'meteofrance_0.5': 'purple',
             'knmi_0.5': 'grey',
             'icon_0.5': 'yellow',
+            'oracle_0.5':'blue',
         }
         
         # Create plot
@@ -545,7 +546,7 @@ def benchmark():
             
             # Columns to evaluate
             cols = [
-                'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
+                'DA elia (11AM)', 'oracle_0.5', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
                 'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
             ]
             
