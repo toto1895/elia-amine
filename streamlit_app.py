@@ -627,7 +627,7 @@ def benchmark():
                     st.write(f"Found {len(valid_files)} valid parquet files")
                     
                     if len(valid_files) > 0:
-                        st.write(f"First few files: {valid_files[:3]}")
+                        st.write(f"First few files: {valid_files[-3:]}")
                         
                         # Extract date information and find the most relevant file
                         date_file_pairs = []
