@@ -704,7 +704,7 @@ def benchmark():
         progress_text = st.empty()
         
         for i, model in enumerate(models):
-            if (model =='oracle') and (pd.to_datetime(selected_date)< pd.to_datetime('2025-03-04')):
+            if (model =='oracle') and (pd.to_datetime(selected_date)<= pd.to_datetime('2025-03-04')):
                 pass
             else:
                 progress_text.text(f"Processing model: {model}")
