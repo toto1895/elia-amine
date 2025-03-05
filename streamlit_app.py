@@ -637,7 +637,7 @@ def benchmark():
                 try:
                     # Single batch approach - simpler and more immediate
                     #files = conn._instance.ls(model_path, max_results=10)
-                    files = list_blobs_in_bucket(model_path)
+                    files = list_blobs_in_bucket('oracle_predictions/predico-elia/forecasts/')
                     
                     if isinstance(files, tuple):
                         files = files[0]
