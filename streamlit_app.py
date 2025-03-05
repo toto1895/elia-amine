@@ -762,7 +762,7 @@ def benchmark():
 
                 # Compute and display scores
                 try:
-                    df = df.dropna()
+                    #df = df.dropna()
                     
                     # Columns to evaluate - check if they exist first
                     all_cols = df.columns.tolist()
