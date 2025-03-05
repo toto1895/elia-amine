@@ -633,13 +633,10 @@ def main():
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview", "Benchmark"])
     
     if page_choice == "Submission Viewer":
-        st.cache_data.clear()
         submission_viewer()
     elif page_choice == "Overview":
-        st.cache_data.clear()
         overview()
     elif page_choice == "Benchmark":
-        st.cache_data.clear()
         benchmark()
 
 if __name__ == "__main__":
