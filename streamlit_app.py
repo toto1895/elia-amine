@@ -617,7 +617,7 @@ def benchmark():
                 # List files for this model
                 try:
                     # Single batch approach - simpler and more immediate
-                    files = conn._instance.ls(model_path, max_results=1000)
+                    files = conn._instance.ls(model_path, max_results=10)
                     
                     if isinstance(files, tuple):
                         files = files[0]
