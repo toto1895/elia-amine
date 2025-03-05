@@ -469,7 +469,6 @@ def list_gcs_files(connection, prefix):
         st.error(traceback.format_exc())
         return []
 
-# Then modify the benchmark function to use this new function
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
@@ -481,14 +480,6 @@ def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
 
-    # Add debug information to check connection
-    st.write("Debug - Connection information:")
-    st.write(f"Connection type: {type(conn)}")
-    try:
-        st.write(f"Connection path: {conn._path}")
-    except:
-        st.write("Could not access connection path")
-
     selected_date = st.date_input("Submission date", pd.to_datetime("today"))
     latest_actual = get_latest_wind_offshore(selected_date)
 
@@ -499,19 +490,25 @@ def benchmark():
     for model in models:
         st.write(f"Processing model: {model}")
         try:
-            # Use our new function to list files
-            prefix = f"oracle_predictions/predico-elia/forecasts/{model}"
-            all_files = list_gcs_files(conn, prefix)
+            # Direct approach without caching
+            all_files = []
             
-            # If no files found, try an alternative approach
-            if not all_files:
-                st.warning(f"No files found for {model} using direct GCS access, trying alternative method...")
-                try:
-                    # Try the original method as a fallback
-                    all_files = []
-                    token = None
-                    
-                    while True:
+            # Let's try to get all possible file paths for debugging
+            bucket_name = "your-bucket-name"  # Replace with your actual bucket
+            
+            # Show all possible paths we're trying
+            possible_paths = [
+                f"oracle_predictions/predico-elia/forecasts/{model}",
+                f"{bucket_name}/oracle_predictions/predico-elia/forecasts/{model}"
+            ]
+            st.write(f"Trying paths: {possible_paths}")
+            
+            # Attempt to list files - with error catching
+            try:
+                # Using the safe approach with pagination as in your original code
+                token = None
+                while True:
+                    try:
                         res = conn._instance.ls(
                             f"oracle_predictions/predico-elia/forecasts/{model}",
                             max_results=100000,
@@ -525,13 +522,19 @@ def benchmark():
                             files = res
                             token = None
 
+                        st.write(f"Batch of {len(files)} files found")
                         all_files.extend(files)
                         if not token:
                             break
-                    
-                    st.write(f"Found {len(all_files)} files using fallback method")
-                except Exception as e:
-                    st.error(f"Error with fallback method: {str(e)}")
+                    except Exception as e:
+                        st.error(f"Error in listing batch: {str(e)}")
+                        break
+                
+                st.write(f"Total files found: {len(all_files)}")
+                if len(all_files) > 0:
+                    st.write(f"First few files: {all_files[:3]}")
+            except Exception as e:
+                st.error(f"Error listing files: {str(e)}")
             
             # Rest of the function remains unchanged...
             sel = get_latest_da_fcst_file(selected_date, all_files)
@@ -564,6 +567,7 @@ def benchmark():
             import traceback
             st.error(traceback.format_exc())
             
+    # Rest of the function as in the original...
     # Combine forecasts
     if forecasts:
         df = pd.concat(forecasts, axis=1)
@@ -580,35 +584,43 @@ def benchmark():
         df = df.iloc[-96:].copy()
         y_cols = df.columns
 
-        # Color mapping for visualization
-        color_map = {
-            'actual': 'white',
-            'DA elia (11AM)': 'orange',
-            'avg_0.5': "rgb(5, 222, 255)",
-            'metno_0.5': 'red',
-            'dmi_seamless_0.5': 'green',
-            'meteofrance_0.5': 'purple',
-            'knmi_0.5': 'grey',
-            'icon_0.5': 'yellow',
-            'oracle_0.5':'blue',
-        }
-        
         # Create plot
         fig = go.Figure()
 
         for col in y_cols:
             try:
+                # Use your original color mapping
+                color = 'blue'  # Default color
+                if col == 'actual':
+                    color = 'white'
+                elif col == 'DA elia (11AM)':
+                    color = 'orange'
+                elif col == 'avg_0.5':
+                    color = "rgb(5, 222, 255)"
+                elif col == 'metno_0.5':
+                    color = 'red'
+                elif col == 'dmi_seamless_0.5':
+                    color = 'green'
+                elif col == 'meteofrance_0.5':
+                    color = 'purple'
+                elif col == 'knmi_0.5':
+                    color = 'grey'
+                elif col == 'icon_0.5':
+                    color = 'yellow'
+                elif col == 'oracle_0.5':
+                    color = 'blue'
+                
                 fig.add_trace(go.Scatter(
                     x=df.index,
                     y=df[col],
                     mode='lines',
                     name=col,
                     visible=(col in default_cols),
-                    line_color=color_map.get(col, 'blue'),
+                    line_color=color,
                     showlegend=False
                 ))
-            except:
-                pass
+            except Exception as e:
+                st.error(f"Error plotting {col}: {str(e)}")
                 
         fig.update_layout(
             xaxis_title="Datetime",
