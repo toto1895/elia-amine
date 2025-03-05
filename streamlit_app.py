@@ -11,6 +11,7 @@ from st_files_connection import FilesConnection
 from google.cloud import run_v2
 from google.oauth2 import service_account
 import json
+import time
 
 # Cache configuration
 st.cache_data.clear()
@@ -614,7 +615,7 @@ def run_forecast_job():
     st.write('Forecast job submitted', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
     
     # Wait for the job to complete
-    import time
+    
     time.sleep(5)
     
     # Run the oracle submission job
@@ -632,10 +633,13 @@ def main():
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview", "Benchmark"])
     
     if page_choice == "Submission Viewer":
+        st.cache_data.clear()
         submission_viewer()
     elif page_choice == "Overview":
+        st.cache_data.clear()
         overview()
     elif page_choice == "Benchmark":
+        st.cache_data.clear()
         benchmark()
 
 if __name__ == "__main__":
