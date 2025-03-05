@@ -235,60 +235,69 @@ def mean_pinball_loss(actual, forecast, alpha=0.5):
     """Compute pinball loss."""
     return np.mean(np.maximum(alpha*(actual - forecast), (alpha-1)*(actual - forecast)))
 
-# File handling functions
 @st.cache_data(ttl=1800)
-def get_latest_da_fcst_file(selected_date, files, fallback=True):
+def get_latest_da_fcst_file(selected_date, files):
     """
     Get the latest day-ahead forecast file for the selected date.
-    If fallback is True and no file is found for the selected date,
-    return the most recent file available.
+    If no file is found for the selected date, return the most recent file available.
+    Uses a simpler approach for more reliable date parsing.
     """
-    selected_str = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
-    files_time = []
+    # Filter for parquet files only and remove directory entries
+    valid_files = [f for f in files if f.endswith(".parquet") and not f.endswith('/')]
     
-    # First try to find files matching the exact date
-    for f in files:
-        if not f.endswith(".parquet"):
-            continue
-        basename = f.split("/")[-1].split('_')
-        if len(basename) < 4:  # Skip if filename format doesn't match expected
-            continue
+    # Parse date from each filename and create a list of (date, file) tuples
+    date_file_pairs = []
+    
+    for file in valid_files:
+        try:
+            # Extract just the filename without path
+            filename = file.split('/')[-1]
             
-        date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
-        hour = basename[3] 
-        
-        if (date_part == selected_str) and (int(hour) < 10):
-            files_time.append(f)
-
-    if len(files_time) > 0:
-        return sorted(files_time)[-1]
-    
-    # If no exact match and fallback is enabled, get the most recent file
-    if fallback and not files_time:
-        all_dates = {}
-        for f in files:
-            if not f.endswith(".parquet"):
-                continue
-            basename = f.split("/")[-1].split('_')
-            if len(basename) < 4:  # Skip if filename format doesn't match expected
+            # Split by underscore to get parts
+            parts = filename.split('_')
+            
+            # Basic validation - we need at least year, month, day
+            if len(parts) < 3:
                 continue
                 
-            date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
-            try:
-                file_date = pd.to_datetime(f"{basename[0]}-{basename[1]}-{basename[2]}")
-                if file_date not in all_dates:
-                    all_dates[file_date] = []
-                all_dates[file_date].append(f)
-            except:
-                continue
-        
-        if all_dates:
-            # Get the most recent date
-            recent_date = sorted(all_dates.keys())[-1]
-            # Get the latest file for that date
-            return sorted(all_dates[recent_date])[-1]
+            # Extract year, month, day
+            year = int(parts[0])
+            month = int(parts[1])
+            day = int(parts[2])
+            
+            # Extract hour, minute if available
+            hour = int(parts[3]) if len(parts) > 3 else 0
+            minute = int(parts[4]) if len(parts) > 4 else 0
+            
+            # Create a datetime object
+            file_date = pd.Timestamp(year=year, month=month, day=day, 
+                                    hour=hour, minute=minute)
+            
+            date_file_pairs.append((file_date, file))
+        except (ValueError, IndexError):
+            # Skip files that don't match the expected format
+            continue
     
-    return None
+    # If no valid files found
+    if not date_file_pairs:
+        return None
+        
+    # Sort all files by date (newest first)
+    date_file_pairs.sort(key=lambda x: x[0], reverse=True)
+    
+    # Convert selected_date to a Timestamp for comparison
+    selected_ts = pd.Timestamp(selected_date)
+    selected_date_start = pd.Timestamp(year=selected_ts.year, month=selected_ts.month, day=selected_ts.day)
+    selected_date_end = selected_date_start + pd.Timedelta(days=1)
+    
+    # First look for files from the selected date
+    for date, file in date_file_pairs:
+        if selected_date_start <= date < selected_date_end:
+            return file
+            
+    # If no file for selected date, return the most recent file
+    return date_file_pairs[0][1] if date_file_pairs else None
+
 
 @st.cache_data(ttl=1800)
 def get_latest_wind_offshore(start) -> pd.DataFrame:
