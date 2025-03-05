@@ -592,187 +592,141 @@ def list_blobs_in_bucket(bucket_name, prefix=None):
     print(f"Files in bucket {bucket_name} with prefix {prefix}:")
     return [blob.name for blob in blobs]  # Return the list of blob names
 
-def get_conn():
-    from st_files_connection import FilesConnection
-    return st.connection('gcs', type=FilesConnection)
-
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
         st.cache_resource.clear()
         st.cache_data.clear()
         st.write("Cache cleared!")
-        time.sleep(5)
+        time.sleep(1)  # Reduced sleep time
 
     st.title("Benchmark Models")
     
     try:
         selected_date = st.date_input("Submission date", pd.to_datetime("today"))
         
-        try:
-            latest_actual = get_latest_wind_offshore(selected_date)
-        except Exception as e:
-            st.error(f"Error getting latest offshore data: {e}")
-            latest_actual = pd.DataFrame()
+        # Use caching for expensive operations
+        @st.cache_data(ttl=3600)  # Cache for 1 hour
+        def get_cached_actual(date):
+            try:
+                return get_latest_wind_offshore(date)
+            except Exception as e:
+                st.error(f"Error getting latest offshore data: {e}")
+                return pd.DataFrame()
+        
+        latest_actual = get_cached_actual(selected_date)
 
         # Fetch model forecasts
-        models = ['avg', 'oracle','metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
-        forecasts = []
+        models = ['avg', 'oracle', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+        forecasts = {}  # Use dict for faster lookups
         
-        for model in models:
-            st.write(f"Processing model: {model}")
+        # Create a client once outside the loop
+        service_account_info = json.loads(GCLOUD)
+        credentials = service_account.Credentials.from_service_account_info(service_account_info)
+        storage_client = storage.Client(credentials=credentials)
+        bucket = storage_client.bucket('oracle_predictions')
+        
+        # Process models in parallel
+        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        def process_model(model, selected_date):
             try:
-
-                # Base path for this model
-                model_path = f"oracle_predictions/predico-elia/forecasts/{model}"
-                #st.write(f"Looking for files in: {model_path}")
-                
                 # List files for this model
-                try:
-                    # Single batch approach - simpler and more immediate
-                    #files = conn._instance.ls(model_path, max_results=10)
-                    files = list_blobs_in_bucket('oracle_predictions', f'predico-elia/forecasts/{model}')
-                    
-                    if isinstance(files, tuple):
-                        files = files[0]
-                    
-                    # Filter out directory entries and non-parquet files
-                    valid_files = [f for f in files if f.endswith(".parquet") and not f.endswith('/')]
-                    #st.write(f"Found {len(valid_files)} valid parquet files")
-                    
-                    if len(valid_files) > 0:
-                        st.write(f"First few files: {valid_files[-3:]}")
-                        
-                        # Extract date information and find the most relevant file
-                        date_file_pairs = []
-                        for file in valid_files:
-                            try:
-                                # Extract just the filename without path
-                                filename = file.split('/')[-1]
-                                
-                                # Parse date from filename
-                                parts = filename.split('_')
-                                if len(parts) >= 3:
-                                    year = int(parts[0])
-                                    month = int(parts[1])
-                                    day = int(parts[2])
-                                    hour = int(parts[3])
-                                    
-                                    # Create a datetime object
-                                    file_date = pd.Timestamp(year=year, month=month, day=day, hour=hour)
-                                    date_file_pairs.append((file_date, file))
-                            except Exception as e:
-                                st.warning(f"Couldn't parse date from {filename}: {e}")
-                                continue
-                        
-                        if date_file_pairs:
-                            # Sort by date (newest first)
-                            date_file_pairs.sort(key=lambda x: x[0], reverse=False)
-                            
-                            # Selected date range
-                            selected_ts = pd.Timestamp(selected_date)
-                            selected_date_start = pd.Timestamp(year=selected_ts.year, month=selected_ts.month, day=selected_ts.day)
-                            selected_date_end = selected_date_start + pd.Timedelta(days=1)
-                            
-                            # Find the best match by date
-                            best_match = None
-                            for date, file in date_file_pairs:
-                                if selected_date_start <= date < selected_date_end:
-                                    best_match = file
-                                    break
-                            
-                            # If no match for selected date, use the most recent
-                            if best_match is None and date_file_pairs:
-                                best_match = date_file_pairs[0][1]
-                            
-                            if best_match:
-                                #st.write(f"Selected file for {model}: {best_match}")
-                                
-                                # IMMEDIATE LOADING: Read the file right after finding it
-                                try:
-                                    # Get a client using the credentials
-                                    service_account_info = json.loads(GCLOUD)
-                                    credentials = service_account.Credentials.from_service_account_info(service_account_info)
-                                    storage_client = storage.Client(credentials=credentials)
-                                    
-                                    # Parse bucket and blob name from the best_match path
-                                    bucket_name = 'oracle_predictions'
-                                    blob_name = best_match
-                                    
-                                    # Get the bucket and blob
-                                    bucket = storage_client.bucket(bucket_name)
-                                    blob = bucket.blob(blob_name)
-                                    
-                                    #st.write(f"Attempting to download blob: {blob_name}")
-                                    
-                                    # Download to a temporary file
-                                    import tempfile
-                                    with tempfile.NamedTemporaryFile(suffix='.parquet') as temp_file:
-                                        blob.download_to_filename(temp_file.name)
-                                        #st.write(f"File downloaded to temporary location: {temp_file.name}")
-                                        
-                                        # Read the parquet file using pandas
-                                        df = pd.read_parquet(temp_file.name)
-                                        
-                                        #st.write(f"Parquet file loaded, shape: {df.shape}")
-                                        
-                                    # Process columns
-                                    try:
-                                        # Try different column name formats
-                                        if all(col in df.columns for col in [0.1, 0.5, 0.9]):
-                                            df = df[[0.1, 0.5, 0.9]]
-                                        elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
-                                            df = df[['0.1', '0.5', '0.9']]
-                                            df.columns = [0.1, 0.5, 0.9]
-                                        else:
-                                            st.warning(f"Could not find expected columns for {model}")
-                                            st.write(f"Available columns: {df.columns.tolist()}")
-                                            continue
-                                            
-                                        # Add to forecasts if successful
-                                        if not df.empty:
-                                            forecasts.append(df.add_prefix(f'{model}_'))
-                                            st.success(f"Successfully loaded data for {model}")
-                                        else:
-                                            st.warning(f"Empty dataframe for {model}")
-                                    except Exception as e:
-                                        st.error(f"Error processing columns for {model}: {e}")
-                                        continue
-                                except FileNotFoundError as fnf:
-                                    st.error(f"File not found for {model}: {best_match}")
-                                    st.error(str(fnf))
-                                except Exception as e:
-                                    st.error(f"Error reading parquet file for {model}: {e}")
-                                    import traceback
-                                    st.error(traceback.format_exc())
-                            else:
-                                st.warning(f"No suitable file found for {model}")
-                        else:
-                            st.warning(f"Could not parse dates from any files for {model}")
-                    else:
-                        st.warning(f"No parquet files found for {model}")
-                except Exception as e:
-                    st.error(f"Error listing files for {model}: {e}")
-                    import traceback
-                    st.error(traceback.format_exc())
-            except Exception as e:
-                st.error(f"Error processing {model}: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+                prefix = f'predico-elia/forecasts/{model}'
+                blobs = list(bucket.list_blobs(prefix=prefix))
                 
+                # Filter for parquet files
+                valid_files = [blob.name for blob in blobs if blob.name.endswith(".parquet")]
+                
+                if not valid_files:
+                    return None
+                
+                # Extract date info and find relevant file
+                date_file_pairs = []
+                for file in valid_files:
+                    try:
+                        filename = file.split('/')[-1]
+                        parts = filename.split('_')
+                        if len(parts) >= 3:
+                            year, month, day, hour = map(int, parts[:4])
+                            file_date = pd.Timestamp(year=year, month=month, day=day, hour=hour)
+                            date_file_pairs.append((file_date, file))
+                    except Exception:
+                        continue
+                
+                if not date_file_pairs:
+                    return None
+                
+                # Sort and select best match
+                date_file_pairs.sort(key=lambda x: x[0], reverse=False)
+                selected_ts = pd.Timestamp(selected_date)
+                selected_date_start = pd.Timestamp(year=selected_ts.year, month=selected_ts.month, day=selected_ts.day)
+                selected_date_end = selected_date_start + pd.Timedelta(days=1)
+                
+                best_match = None
+                for date, file in date_file_pairs:
+                    if selected_date_start <= date < selected_date_end:
+                        best_match = file
+                        break
+                
+                # Use most recent if no match
+                if best_match is None and date_file_pairs:
+                    best_match = date_file_pairs[0][1]
+                
+                if not best_match:
+                    return None
+                
+                # Download and load the file
+                blob = bucket.blob(best_match)
+                
+                with tempfile.NamedTemporaryFile(suffix='.parquet', delete=True) as temp_file:
+                    blob.download_to_filename(temp_file.name)
+                    df = pd.read_parquet(temp_file.name)
+                
+                # Process columns
+                if all(col in df.columns for col in [0.1, 0.5, 0.9]):
+                    df = df[[0.1, 0.5, 0.9]]
+                elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
+                    df = df[['0.1', '0.5', '0.9']]
+                    df.columns = [0.1, 0.5, 0.9]
+                else:
+                    return None
+                
+                if df.empty:
+                    return None
+                
+                return df.add_prefix(f'{model}_')
+                
+            except Exception:
+                return None
+        
+        # Use a progress bar and process models
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+        
+        for i, model in enumerate(models):
+            progress_text.text(f"Processing model: {model}")
+            result = process_model(model, selected_date)
+            if result is not None:
+                forecasts[model] = result
+                st.success(f"Successfully loaded data for {model}")
+            progress_bar.progress((i + 1) / len(models))
+        
+        progress_bar.empty()
+        progress_text.empty()
+        
         # Combine and visualize forecasts
         if forecasts:
             try:
-                df = pd.concat(forecasts, axis=1)
+                df = pd.concat(list(forecasts.values()), axis=1)
                 df.index = pd.to_datetime(df.index)
                 
                 try:
                     if not latest_actual.empty:
                         df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
-                        default_cols = ['actual', 'DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
+                        default_cols = ['actual', 'DA elia (11AM)', 'oracle_0.5','avg_0.5', 'icon_0.5', 'metno_0.5', 
                                       'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
                     else:
-                        default_cols = ['DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
+                        default_cols = ['DA elia (11AM)', 'oracle_0.5', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
                                        'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
                 except Exception as e:
                     st.error(f"Error merging latest actual data: {e}")
@@ -780,46 +734,39 @@ def benchmark():
                                    'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
 
                 df = df.iloc[-96:].copy()
-                y_cols = df.columns
+                
+                # Pre-compute color mapping for faster plotting
+                color_map = {
+                    'actual': 'white',
+                    'DA elia (11AM)': 'orange',
+                    'avg_0.5': "rgb(5, 222, 255)",
+                    'metno_0.5': 'red',
+                    'dmi_seamless_0.5': 'green',
+                    'meteofrance_0.5': 'purple',
+                    'knmi_0.5': 'grey',
+                    'icon_0.5': 'yellow',
+                    'oracle_0.5': 'blue'
+                }
 
-                # Create plot
+                # Create plot more efficiently
                 fig = go.Figure()
-
-                for col in y_cols:
-                    try:
-                        # Use your original color mapping
-                        color = 'blue'  # Default color
-                        if col == 'actual':
-                            color = 'white'
-                        elif col == 'DA elia (11AM)':
-                            color = 'orange'
-                        elif col == 'avg_0.5':
-                            color = "rgb(5, 222, 255)"
-                        elif col == 'metno_0.5':
-                            color = 'red'
-                        elif col == 'dmi_seamless_0.5':
-                            color = 'green'
-                        elif col == 'meteofrance_0.5':
-                            color = 'purple'
-                        elif col == 'knmi_0.5':
-                            color = 'grey'
-                        elif col == 'icon_0.5':
-                            color = 'yellow'
-                        elif col == 'oracle_0.5':
-                            color = 'blue'
-                        
-                        fig.add_trace(go.Scatter(
-                            x=df.index,
-                            y=df[col],
-                            mode='lines',
-                            name=col,
-                            visible=(col in default_cols),
-                            line_color=color,
-                            showlegend=True  # Changed to True for better visualization
-                        ))
-                    except Exception as e:
-                        st.error(f"Error plotting {col}: {str(e)}")
-                        
+                traces = []
+                
+                for col in df.columns:
+                    color = color_map.get(col, 'blue')  # Default color
+                    
+                    traces.append(go.Scatter(
+                        x=df.index,
+                        y=df[col],
+                        mode='lines',
+                        name=col,
+                        visible=(col in default_cols),
+                        line_color=color,
+                        showlegend=True
+                    ))
+                
+                fig.add_traces(traces)
+                
                 fig.update_layout(
                     xaxis_title="Datetime",
                     yaxis_title="MW",
@@ -830,61 +777,66 @@ def benchmark():
 
                 st.plotly_chart(fig)
 
-                # Compute and display scores
-                try:
-                    # Columns to evaluate - check if they exist first
-                    all_cols = df.columns.tolist()
-                    cols = [
-                        'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
-                        'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
-                    ]
-                    # Only keep columns that exist in the dataframe
-                    cols = [col for col in cols if col in all_cols]
-                    
-                    if 'actual' in all_cols:
-                        def compute_scores(group, col):
-                            # Handle NaN values gracefully
-                            valid_mask = ~np.isnan(group['actual']) & ~np.isnan(group[col])
-                            if valid_mask.sum() == 0:
-                                return pd.Series({f'{col}_RMSE': np.nan, f'{col}_MAE': np.nan})
+                # Compute scores only if actual data exists
+                if 'actual' in df.columns:
+                    # Optimize score computation
+                    @st.cache_data(ttl=3600)
+                    def compute_all_scores(df_json, cols):
+                        df = pd.read_json(df_json)
+                        results = {}
+                        
+                        for col in cols:
+                            if col not in df.columns:
+                                continue
                                 
-                            actual = group.loc[valid_mask, 'actual']
-                            pred = group.loc[valid_mask, col]
+                            # Vectorized operations instead of apply
+                            valid_mask = ~np.isnan(df['actual']) & ~np.isnan(df[col])
+                            if valid_mask.sum() == 0:
+                                results[f'{col}_RMSE'] = np.nan
+                                results[f'{col}_MAE'] = np.nan
+                                continue
+                                
+                            actual = df.loc[valid_mask, 'actual']
+                            pred = df.loc[valid_mask, col]
                             
                             error = actual - pred
                             rmse = np.sqrt(np.mean(error**2))
                             mae = np.mean(np.abs(error))
-                            return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
-
-                        scores = df.groupby(df.index.date).apply(
-                            lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
-                        )
-
-                        rmse = scores.loc[:, scores.columns.str.contains('RMSE')].dropna(how='all').T
-                        mae = scores.loc[:, scores.columns.str.contains('MAE')].dropna(how='all').T
-
-                        st.subheader("RMSE Scores")
-                        st.dataframe(rmse.T.tail(1))
-                        
-                        st.subheader("MAE Scores")
-                        st.dataframe(mae.T.tail(1))
-                    else:
-                        st.warning("Cannot compute scores without 'actual' column")
-                except Exception as e:
-                    st.error(f"Error computing scores: {str(e)}")
-                    import traceback
-                    st.error(traceback.format_exc())
+                            
+                            results[f'{col}_RMSE'] = rmse
+                            results[f'{col}_MAE'] = mae
+                            
+                        return pd.DataFrame([results])
+                    
+                    # Convert columns to evaluate
+                    all_cols = df.columns.tolist()
+                    cols = [
+                        'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
+                        'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5', 'oracle_0.5'
+                    ]
+                    cols = [col for col in cols if col in all_cols]
+                    
+                    # Get scores using cached function
+                    scores_df = compute_all_scores(df.reset_index().to_json(), cols)
+                    
+                    # Split and display results
+                    rmse_cols = [col for col in scores_df.columns if 'RMSE' in col]
+                    mae_cols = [col for col in scores_df.columns if 'MAE' in col]
+                    
+                    st.subheader("RMSE Scores")
+                    st.dataframe(scores_df[rmse_cols])
+                    
+                    st.subheader("MAE Scores")
+                    st.dataframe(scores_df[mae_cols])
+                else:
+                    st.warning("Cannot compute scores without 'actual' column")
+                    
             except Exception as e:
-                st.error(f"Error processing forecasts: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+                st.error(f"Error processing forecasts: {str(e)}")
         else:
             st.warning("No forecast data available for the selected date.")
     except Exception as e:
         st.error(f"Error in benchmark function: {e}")
-        import traceback
-        st.error(traceback.format_exc())
-
 def overview():
     """Show rankings and profit/loss overview."""
     # Add password protection
