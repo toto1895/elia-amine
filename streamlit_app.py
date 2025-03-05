@@ -574,6 +574,25 @@ def submission_viewer():
         import traceback
         st.error(traceback.format_exc())
 
+
+from google.cloud import storage
+def list_blobs_in_bucket(bucket_name):
+    """Lists all the blobs in the bucket."""
+    # Instantiate a client
+    service_account_info = json.loads(GCLOUD)
+    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+    storage_client = storage.Client(credentials=credentials)
+    
+    # Get the bucket
+    bucket = storage_client.bucket(bucket_name)
+    
+    # List all blobs in the bucket
+    blobs = bucket.list_blobs()
+    
+    print(f"Files in bucket {bucket_name}:")
+    for blob in blobs:
+        print(f"- {blob.name}")
+
 def get_conn():
     from st_files_connection import FilesConnection
     return st.connection('gcs', type=FilesConnection)
@@ -617,7 +636,8 @@ def benchmark():
                 # List files for this model
                 try:
                     # Single batch approach - simpler and more immediate
-                    files = conn._instance.ls(model_path, max_results=10)
+                    #files = conn._instance.ls(model_path, max_results=10)
+                    files = list_blobs_in_bucket(model_path)
                     
                     if isinstance(files, tuple):
                         files = files[0]
