@@ -598,7 +598,7 @@ def benchmark():
             latest_actual = pd.DataFrame()
 
         # Fetch model forecasts
-        models = ['oracle', 'avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+        models = ['avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
         forecasts = []
         
         for model in models:
