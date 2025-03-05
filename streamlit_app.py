@@ -576,8 +576,8 @@ def submission_viewer():
 
 
 from google.cloud import storage
-def list_blobs_in_bucket(bucket_name):
-    """Lists all the blobs in the bucket."""
+def list_blobs_in_bucket(bucket_name, prefix=None):
+    """Lists all the blobs in the bucket with the given prefix."""
     # Instantiate a client
     service_account_info = json.loads(GCLOUD)
     credentials = service_account.Credentials.from_service_account_info(service_account_info)
@@ -586,12 +586,11 @@ def list_blobs_in_bucket(bucket_name):
     # Get the bucket
     bucket = storage_client.bucket(bucket_name)
     
-    # List all blobs in the bucket
-    blobs = bucket.list_blobs()
+    # List blobs in the bucket with the specified prefix
+    blobs = bucket.list_blobs(prefix=prefix)
     
-    print(f"Files in bucket {bucket_name}:")
-    for blob in blobs:
-        print(f"- {blob.name}")
+    print(f"Files in bucket {bucket_name} with prefix {prefix}:")
+    return [blob.name for blob in blobs]  # Return the list of blob names
 
 def get_conn():
     from st_files_connection import FilesConnection
@@ -637,7 +636,7 @@ def benchmark():
                 try:
                     # Single batch approach - simpler and more immediate
                     #files = conn._instance.ls(model_path, max_results=10)
-                    files = list_blobs_in_bucket('oracle_predictions/predico-elia/forecasts')
+                    files = list_blobs_in_bucket('oracle_predictions', f'predico-elia/forecasts/{model}')
                     
                     if isinstance(files, tuple):
                         files = files[0]
