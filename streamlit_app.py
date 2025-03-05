@@ -622,9 +622,7 @@ def benchmark():
         for model in models:
             st.write(f"Processing model: {model}")
             try:
-                # Get a fresh connection for each model to avoid any caching issues
-                conn = get_conn()
-                
+
                 # Base path for this model
                 model_path = f"oracle_predictions/predico-elia/forecasts/{model}"
                 st.write(f"Looking for files in: {model_path}")
@@ -646,7 +644,7 @@ def benchmark():
                     st.write(f"Found {len(valid_files)} valid parquet files")
                     
                     if len(valid_files) > 0:
-                        st.write(f"First few files: {valid_files}")
+                        st.write(f"First few files: {valid_files[-3:]}")
                         
                         # Extract date information and find the most relevant file
                         date_file_pairs = []
@@ -695,45 +693,62 @@ def benchmark():
                                 
                                 # IMMEDIATE LOADING: Read the file right after finding it
                                 try:
-                                    # Get a fresh connection for reading
-                                    read_conn = get_conn()
+                                    # Get a client using the credentials
+                                    service_account_info = json.loads(GCLOUD)
+                                    credentials = service_account.Credentials.from_service_account_info(service_account_info)
+                                    storage_client = storage.Client(credentials=credentials)
                                     
-                                    # Check if file exists before trying to read it
-                                    try:
-                                        # Read the file
-                                        df = read_conn.read(best_match, input_format="parquet")
+                                    # Parse bucket and blob name from the best_match path
+                                    bucket_name = 'oracle_predictions'
+                                    blob_name = best_match
+                                    
+                                    # Get the bucket and blob
+                                    bucket = storage_client.bucket(bucket_name)
+                                    blob = bucket.blob(blob_name)
+                                    
+                                    st.write(f"Attempting to download blob: {blob_name}")
+                                    
+                                    # Download to a temporary file
+                                    import tempfile
+                                    with tempfile.NamedTemporaryFile(suffix='.parquet') as temp_file:
+                                        blob.download_to_filename(temp_file.name)
+                                        st.write(f"File downloaded to temporary location: {temp_file.name}")
                                         
-                                        # Process columns
-                                        try:
-                                            # Try different column name formats
-                                            if all(col in df.columns for col in [0.1, 0.5, 0.9]):
-                                                df = df[[0.1, 0.5, 0.9]]
-                                            elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
-                                                df = df[['0.1', '0.5', '0.9']]
-                                                df.columns = [0.1, 0.5, 0.9]
-                                            else:
-                                                st.warning(f"Could not find expected columns for {model}")
-                                                st.write(f"Available columns: {df.columns.tolist()}")
-                                                continue
-                                                
-                                            # Add to forecasts if successful
-                                            if not df.empty:
-                                                forecasts.append(df.add_prefix(f'{model}_'))
-                                                st.success(f"Successfully loaded data for {model}")
-                                            else:
-                                                st.warning(f"Empty dataframe for {model}")
-                                        except Exception as e:
-                                            st.error(f"Error processing columns for {model}: {e}")
+                                        # Read the parquet file using pandas
+                                        import pandas as pd
+                                        df = pd.read_parquet(temp_file.name)
+                                        
+                                        st.write(f"Parquet file loaded, shape: {df.shape}")
+                                        
+                                    # Process columns
+                                    try:
+                                        # Try different column name formats
+                                        if all(col in df.columns for col in [0.1, 0.5, 0.9]):
+                                            df = df[[0.1, 0.5, 0.9]]
+                                        elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
+                                            df = df[['0.1', '0.5', '0.9']]
+                                            df.columns = [0.1, 0.5, 0.9]
+                                        else:
+                                            st.warning(f"Could not find expected columns for {model}")
+                                            st.write(f"Available columns: {df.columns.tolist()}")
                                             continue
-                                    except FileNotFoundError as fnf:
-                                        st.error(f"File not found for {model}: {best_match}")
-                                        st.error(str(fnf))
+                                            
+                                        # Add to forecasts if successful
+                                        if not df.empty:
+                                            forecasts.append(df.add_prefix(f'{model}_'))
+                                            st.success(f"Successfully loaded data for {model}")
+                                        else:
+                                            st.warning(f"Empty dataframe for {model}")
                                     except Exception as e:
-                                        st.error(f"Error reading parquet file for {model}: {e}")
-                                        import traceback
-                                        st.error(traceback.format_exc())
+                                        st.error(f"Error processing columns for {model}: {e}")
+                                        continue
+                                except FileNotFoundError as fnf:
+                                    st.error(f"File not found for {model}: {best_match}")
+                                    st.error(str(fnf))
                                 except Exception as e:
-                                    st.error(f"Error initializing connection to read file: {e}")
+                                    st.error(f"Error reading parquet file for {model}: {e}")
+                                    import traceback
+                                    st.error(traceback.format_exc())
                             else:
                                 st.warning(f"No suitable file found for {model}")
                         else:
