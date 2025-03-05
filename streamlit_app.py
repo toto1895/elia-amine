@@ -575,6 +575,7 @@ def submission_viewer():
         st.error(traceback.format_exc())
 
 def get_conn():
+    # Create a fresh connection each time
     return st.connection('gcs', type=FilesConnection)
 
 def benchmark():
@@ -588,7 +589,6 @@ def benchmark():
     st.title("Benchmark Models")
     
     try:
-        conn = get_conn()
         selected_date = st.date_input("Submission date", pd.to_datetime("today"))
         
         try:
@@ -604,94 +604,132 @@ def benchmark():
         for model in models:
             st.write(f"Processing model: {model}")
             try:
-                # Direct approach without caching
+                # Get a fresh connection for each model to avoid any caching issues
+                conn = get_conn()
+                
+                # Base path for this model
+                model_path = f"oracle_predictions/predico-elia/forecasts/{model}"
+                st.write(f"Looking for files in: {model_path}")
+                
+                # Approach: Find files, then immediately process the most relevant one
                 all_files = []
                 
-                # Let's try to get all possible file paths for debugging
-                bucket_name = "oracle_predictions"  # Replace with your actual bucket
-                
-                # Show all possible paths we're trying
-                possible_paths = [
-                    f"{bucket_name}/predico-elia/forecasts/{model}"
-                    #f"your-bucket-name/oracle_predictions/predico-elia/forecasts/{model}"
-                ]
-                st.write(f"Trying paths: {possible_paths}")
-                
-                # Attempt to list files - with error catching
+                # List files for this model
                 try:
-                    # Using the safe approach with pagination as in your original code
-                    token = None
-                    while True:
-                        try:
-                            res = conn._instance.ls(
-                                f"oracle_predictions/predico-elia/forecasts/{model}",
-                                max_results=1000,
-                                page_token=token
-                            )
-                            
-                            if isinstance(res, tuple):
-                                files = res[0]
-                                token = res[1] if len(res) > 1 else None
-                            else:
-                                files = res
-                                token = None
-
-                            st.write(f"Batch of {len(files)} files found")
-                            all_files.extend(files)
-                            if not token:
-                                break
-                        except Exception as e:
-                            st.error(f"Error in listing batch: {str(e)}")
-                            break
+                    # Single batch approach - simpler and more immediate
+                    files = conn._instance.ls(model_path, max_results=1000)
                     
-                    st.write(f"Total files found: {len(all_files)}")
-                    if len(all_files) > 0:
-                        st.write(f"First few files: {all_files[:3]}")
-                except Exception as e:
-                    st.error(f"Error listing files: {str(e)}")
-                
-                # Get the latest file for this model
-                sel = get_latest_da_fcst_file(selected_date, all_files)
-                
-                if sel:
-                    st.write(f"Selected file for {model}: {sel}")
+                    if isinstance(files, tuple):
+                        files = files[0]
                     
-                    # Try to read the file with proper error handling
-                    try:
-                        df = conn.read(sel, input_format="parquet")
+                    # Filter out directory entries and non-parquet files
+                    valid_files = [f for f in files if f.endswith(".parquet") and not f.endswith('/')]
+                    st.write(f"Found {len(valid_files)} valid parquet files")
+                    
+                    if len(valid_files) > 0:
+                        st.write(f"First few files: {valid_files[:3]}")
                         
-                        try:
-                            df = df[[0.1, 0.5, 0.9]]
-                        except:
+                        # Extract date information and find the most relevant file
+                        date_file_pairs = []
+                        for file in valid_files:
                             try:
-                                df = df[['0.1', '0.5', '0.9']]
-                                df.columns = [0.1, 0.5, 0.9]
-                            except:
-                                st.warning(f"Could not find expected columns for {model}")
-                                # Debug: print all columns
-                                st.write(f"Available columns for {model}: {df.columns.tolist()}")
+                                # Extract just the filename without path
+                                filename = file.split('/')[-1]
+                                
+                                # Parse date from filename
+                                parts = filename.split('_')
+                                if len(parts) >= 3:
+                                    year = int(parts[0])
+                                    month = int(parts[1])
+                                    day = int(parts[2])
+                                    
+                                    # Create a datetime object
+                                    file_date = pd.Timestamp(year=year, month=month, day=day)
+                                    date_file_pairs.append((file_date, file))
+                            except Exception as e:
+                                st.warning(f"Couldn't parse date from {filename}: {e}")
                                 continue
+                        
+                        if date_file_pairs:
+                            # Sort by date (newest first)
+                            date_file_pairs.sort(key=lambda x: x[0], reverse=True)
                             
-                        if not df.empty:
-                            forecasts.append(df.add_prefix(f'{model}_'))
+                            # Selected date range
+                            selected_ts = pd.Timestamp(selected_date)
+                            selected_date_start = pd.Timestamp(year=selected_ts.year, month=selected_ts.month, day=selected_ts.day)
+                            selected_date_end = selected_date_start + pd.Timedelta(days=1)
+                            
+                            # Find the best match by date
+                            best_match = None
+                            for date, file in date_file_pairs:
+                                if selected_date_start <= date < selected_date_end:
+                                    best_match = file
+                                    break
+                            
+                            # If no match for selected date, use the most recent
+                            if best_match is None and date_file_pairs:
+                                best_match = date_file_pairs[0][1]
+                            
+                            if best_match:
+                                st.write(f"Selected file for {model}: {best_match}")
+                                
+                                # IMMEDIATE LOADING: Read the file right after finding it
+                                try:
+                                    # Get a fresh connection for reading
+                                    read_conn = get_conn()
+                                    
+                                    # Check if file exists before trying to read it
+                                    try:
+                                        # Read the file
+                                        df = read_conn.read(best_match, input_format="parquet")
+                                        
+                                        # Process columns
+                                        try:
+                                            # Try different column name formats
+                                            if all(col in df.columns for col in [0.1, 0.5, 0.9]):
+                                                df = df[[0.1, 0.5, 0.9]]
+                                            elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
+                                                df = df[['0.1', '0.5', '0.9']]
+                                                df.columns = [0.1, 0.5, 0.9]
+                                            else:
+                                                st.warning(f"Could not find expected columns for {model}")
+                                                st.write(f"Available columns: {df.columns.tolist()}")
+                                                continue
+                                                
+                                            # Add to forecasts if successful
+                                            if not df.empty:
+                                                forecasts.append(df.add_prefix(f'{model}_'))
+                                                st.success(f"Successfully loaded data for {model}")
+                                            else:
+                                                st.warning(f"Empty dataframe for {model}")
+                                        except Exception as e:
+                                            st.error(f"Error processing columns for {model}: {e}")
+                                            continue
+                                    except FileNotFoundError as fnf:
+                                        st.error(f"File not found for {model}: {best_match}")
+                                        st.error(str(fnf))
+                                    except Exception as e:
+                                        st.error(f"Error reading parquet file for {model}: {e}")
+                                        import traceback
+                                        st.error(traceback.format_exc())
+                                except Exception as e:
+                                    st.error(f"Error initializing connection to read file: {e}")
+                            else:
+                                st.warning(f"No suitable file found for {model}")
                         else:
-                            st.warning(f"Empty dataframe for {model}")
-                    except FileNotFoundError as fnf:
-                        st.error(f"File not found for {model}: {sel}")
-                        st.error(str(fnf))
-                    except Exception as e:
-                        st.error(f"Error reading parquet file for {model}: {e}")
-                        import traceback
-                        st.error(traceback.format_exc())
-                else:
-                    st.warning(f"No matching file found for {model} on {selected_date}")
-                    
+                            st.warning(f"Could not parse dates from any files for {model}")
+                    else:
+                        st.warning(f"No parquet files found for {model}")
+                except Exception as e:
+                    st.error(f"Error listing files for {model}: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
             except Exception as e:
                 st.error(f"Error processing {model}: {e}")
                 import traceback
                 st.error(traceback.format_exc())
                 
-        # Combine forecasts
+        # Combine and visualize forecasts
         if forecasts:
             try:
                 df = pd.concat(forecasts, axis=1)
@@ -700,8 +738,8 @@ def benchmark():
                 try:
                     if not latest_actual.empty:
                         df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
-                        default_cols = ['actual', 'DA elia (11AM)', 'oracle_0.5','avg_0.5', 'icon_0.5', 'metno_0.5', 
-                                        'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                        default_cols = ['actual', 'DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
+                                      'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
                     else:
                         default_cols = ['DA elia (11AM)', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
                                        'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
@@ -746,7 +784,7 @@ def benchmark():
                             name=col,
                             visible=(col in default_cols),
                             line_color=color,
-                            showlegend=False
+                            showlegend=True  # Changed to True for better visualization
                         ))
                     except Exception as e:
                         st.error(f"Error plotting {col}: {str(e)}")
@@ -756,18 +794,17 @@ def benchmark():
                     yaxis_title="MW",
                     yaxis=dict(range=[0, 2300]),
                     template="plotly_dark",
+                    legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                 )
 
                 st.plotly_chart(fig)
 
                 # Compute and display scores
                 try:
-                    #df = df.dropna()
-                    
                     # Columns to evaluate - check if they exist first
                     all_cols = df.columns.tolist()
                     cols = [
-                        'DA elia (11AM)', 'oracle_0.5', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
+                        'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
                         'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5',
                     ]
                     # Only keep columns that exist in the dataframe
@@ -775,7 +812,15 @@ def benchmark():
                     
                     if 'actual' in all_cols:
                         def compute_scores(group, col):
-                            error = group.actual - group[col]
+                            # Handle NaN values gracefully
+                            valid_mask = ~np.isnan(group['actual']) & ~np.isnan(group[col])
+                            if valid_mask.sum() == 0:
+                                return pd.Series({f'{col}_RMSE': np.nan, f'{col}_MAE': np.nan})
+                                
+                            actual = group.loc[valid_mask, 'actual']
+                            pred = group.loc[valid_mask, col]
+                            
+                            error = actual - pred
                             rmse = np.sqrt(np.mean(error**2))
                             mae = np.mean(np.abs(error))
                             return pd.Series({f'{col}_RMSE': rmse, f'{col}_MAE': mae})
@@ -784,10 +829,13 @@ def benchmark():
                             lambda grp: pd.concat([compute_scores(grp, col) for col in cols if col in grp.columns])
                         )
 
-                        rmse = scores.loc[:, scores.columns.str.contains('RMSE')].dropna().T
-                        mae = scores.loc[:, scores.columns.str.contains('MAE')].dropna().T
+                        rmse = scores.loc[:, scores.columns.str.contains('RMSE')].dropna(how='all').T
+                        mae = scores.loc[:, scores.columns.str.contains('MAE')].dropna(how='all').T
 
+                        st.subheader("RMSE Scores")
                         st.dataframe(rmse.T.tail(1))
+                        
+                        st.subheader("MAE Scores")
                         st.dataframe(mae.T.tail(1))
                     else:
                         st.warning("Cannot compute scores without 'actual' column")
