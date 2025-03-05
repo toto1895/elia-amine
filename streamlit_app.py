@@ -12,7 +12,7 @@ from google.cloud import run_v2
 from google.oauth2 import service_account
 import json
 import time
-
+import tempfile
 # Clear cache on startup
 st.cache_data.clear()
 
@@ -627,7 +627,7 @@ def benchmark():
         bucket = storage_client.bucket('oracle_predictions')
         
         # Process models in parallel
-        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        @st.cache_data(ttl=60, show_spinner=False)  # Cache for 1 hour
         def process_model(model, selected_date):
             try:
                 # List files for this model
