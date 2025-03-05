@@ -537,12 +537,12 @@ def benchmark():
             all_files = []
             
             # Let's try to get all possible file paths for debugging
-            bucket_name = "your-bucket-name"  # Replace with your actual bucket
+            bucket_name = "oracle_predictions"  # Replace with your actual bucket
             
             # Show all possible paths we're trying
             possible_paths = [
-                f"oracle_predictions/predico-elia/forecasts/{model}",
-                f"{bucket_name}/oracle_predictions/predico-elia/forecasts/{model}"
+                #f"oracle_predictions/predico-elia/forecasts/{model}",
+                f"{bucket_name}/predico-elia/forecasts/{model}"
             ]
             st.write(f"Trying paths: {possible_paths}")
             
