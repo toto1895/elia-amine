@@ -642,9 +642,10 @@ def benchmark():
                                     year = int(parts[0])
                                     month = int(parts[1])
                                     day = int(parts[2])
+                                    hour = int(parts[3])
                                     
                                     # Create a datetime object
-                                    file_date = pd.Timestamp(year=year, month=month, day=day)
+                                    file_date = pd.Timestamp(year=year, month=month, day=day, hour=hour)
                                     date_file_pairs.append((file_date, file))
                             except Exception as e:
                                 st.warning(f"Couldn't parse date from {filename}: {e}")
@@ -652,7 +653,7 @@ def benchmark():
                         
                         if date_file_pairs:
                             # Sort by date (newest first)
-                            date_file_pairs.sort(key=lambda x: x[0], reverse=True)
+                            date_file_pairs.sort(key=lambda x: x[0], reverse=False)
                             
                             # Selected date range
                             selected_ts = pd.Timestamp(selected_date)
