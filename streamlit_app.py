@@ -575,7 +575,7 @@ def submission_viewer():
         st.error(traceback.format_exc())
 
 def get_conn():
-    # Create a fresh connection each time
+    from st_files_connection import FilesConnection
     return st.connection('gcs', type=FilesConnection)
 
 def benchmark():
