@@ -237,24 +237,58 @@ def mean_pinball_loss(actual, forecast, alpha=0.5):
 
 # File handling functions
 @st.cache_data(ttl=1800)
-def get_latest_da_fcst_file(selected_date, files):
-    """Get the latest day-ahead forecast file for the selected date."""
+def get_latest_da_fcst_file(selected_date, files, fallback=True):
+    """
+    Get the latest day-ahead forecast file for the selected date.
+    If fallback is True and no file is found for the selected date,
+    return the most recent file available.
+    """
     selected_str = pd.to_datetime(selected_date).strftime("%Y_%m_%d")
     files_time = []
+    
+    # First try to find files matching the exact date
     for f in files:
         if not f.endswith(".parquet"):
             continue
         basename = f.split("/")[-1].split('_')
+        if len(basename) < 4:  # Skip if filename format doesn't match expected
+            continue
+            
         date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
         hour = basename[3] 
         
         if (date_part == selected_str) and (int(hour) < 10):
             files_time.append(f)
 
-    if len(files_time) == 0:
-        return None
-    selected_file = sorted(files_time)
-    return selected_file[-1]
+    if len(files_time) > 0:
+        return sorted(files_time)[-1]
+    
+    # If no exact match and fallback is enabled, get the most recent file
+    if fallback and not files_time:
+        all_dates = {}
+        for f in files:
+            if not f.endswith(".parquet"):
+                continue
+            basename = f.split("/")[-1].split('_')
+            if len(basename) < 4:  # Skip if filename format doesn't match expected
+                continue
+                
+            date_part = basename[0]+'_'+basename[1]+'_'+basename[2]
+            try:
+                file_date = pd.to_datetime(f"{basename[0]}-{basename[1]}-{basename[2]}")
+                if file_date not in all_dates:
+                    all_dates[file_date] = []
+                all_dates[file_date].append(f)
+            except:
+                continue
+        
+        if all_dates:
+            # Get the most recent date
+            recent_date = sorted(all_dates.keys())[-1]
+            # Get the latest file for that date
+            return sorted(all_dates[recent_date])[-1]
+    
+    return None
 
 @st.cache_data(ttl=1800)
 def get_latest_wind_offshore(start) -> pd.DataFrame:
