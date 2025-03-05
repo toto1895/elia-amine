@@ -428,6 +428,48 @@ def submission_viewer():
 
     st.plotly_chart(fig)
 
+@st.cache_data(ttl=1800)
+def list_gcs_files(connection, prefix):
+    """
+    List GCS files using native method with debugging information.
+    Returns a list of file paths matching the given prefix.
+    """
+    try:
+        # Get the GCS bucket name from your connection
+        # If your connection is directly to a bucket, you might need to extract it differently
+        # This is a common pattern, but check your actual connection setup
+        bucket_name = connection._path.split('/')[0] if '/' in connection._path else connection._path
+        
+        # Debug information
+        st.write(f"Debug - Bucket: {bucket_name}, Prefix: {prefix}")
+        
+        # Use Google Cloud Storage client directly
+        from google.cloud import storage
+        
+        # Use credentials from the connection if available
+        client = storage.Client()
+        bucket = client.bucket(bucket_name)
+        
+        # List all blobs with the given prefix
+        blobs = list(client.list_blobs(bucket, prefix=prefix))
+        
+        # Get the names of all blobs
+        file_paths = [blob.name for blob in blobs]
+        
+        # Debug information
+        st.write(f"Found {len(file_paths)} files")
+        if len(file_paths) > 0:
+            st.write(f"Sample file: {file_paths[0]}")
+        
+        return file_paths
+    
+    except Exception as e:
+        st.error(f"Error listing files: {str(e)}")
+        import traceback
+        st.error(traceback.format_exc())
+        return []
+
+# Then modify the benchmark function to use this new function
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
@@ -439,53 +481,88 @@ def benchmark():
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
 
+    # Add debug information to check connection
+    st.write("Debug - Connection information:")
+    st.write(f"Connection type: {type(conn)}")
+    try:
+        st.write(f"Connection path: {conn._path}")
+    except:
+        st.write("Could not access connection path")
+
     selected_date = st.date_input("Submission date", pd.to_datetime("today"))
     latest_actual = get_latest_wind_offshore(selected_date)
 
     # Fetch model forecasts
-    models = ['oracle','avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+    models = ['oracle', 'avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
     forecasts = []
     
     for model in models:
+        st.write(f"Processing model: {model}")
         try:
-            all_files = []
-            token = None
+            # Use our new function to list files
+            prefix = f"oracle_predictions/predico-elia/forecasts/{model}"
+            all_files = list_gcs_files(conn, prefix)
             
-            while True:
-                res = conn._instance.ls(
-                    f"oracle_predictions/predico-elia/forecasts/{model}",
-                    max_results=100000,
-                    page_token=token
-                )
-                
-                if isinstance(res, tuple):
-                    files = res[0]
-                    token = res[1] if len(res) > 1 else None
-                else:
-                    files = res
+            # If no files found, try an alternative approach
+            if not all_files:
+                st.warning(f"No files found for {model} using direct GCS access, trying alternative method...")
+                try:
+                    # Try the original method as a fallback
+                    all_files = []
                     token = None
+                    
+                    while True:
+                        res = conn._instance.ls(
+                            f"oracle_predictions/predico-elia/forecasts/{model}",
+                            max_results=100000,
+                            page_token=token
+                        )
+                        
+                        if isinstance(res, tuple):
+                            files = res[0]
+                            token = res[1] if len(res) > 1 else None
+                        else:
+                            files = res
+                            token = None
 
-                all_files.extend(files)
-                if not token:
-                    break
-
+                        all_files.extend(files)
+                        if not token:
+                            break
+                    
+                    st.write(f"Found {len(all_files)} files using fallback method")
+                except Exception as e:
+                    st.error(f"Error with fallback method: {str(e)}")
+            
+            # Rest of the function remains unchanged...
             sel = get_latest_da_fcst_file(selected_date, all_files)
             
             if sel:
+                st.write(f"Selected file for {model}: {sel}")
                 df = conn.read(sel, input_format="parquet")
                 
                 try:
                     df = df[[0.1, 0.5, 0.9]]
                 except:
-                    df = df[['0.1', '0.5', '0.9']]
+                    try:
+                        df = df[['0.1', '0.5', '0.9']]
+                        df.columns = [0.1, 0.5, 0.9]
+                    except:
+                        st.warning(f"Could not find expected columns for {model}")
+                        # Debug: print all columns
+                        st.write(f"Available columns for {model}: {df.columns.tolist()}")
+                        continue
                     
-                df.columns = [0.1, 0.5, 0.9]
-                
                 if not df.empty:
                     forecasts.append(df.add_prefix(f'{model}_'))
+                else:
+                    st.warning(f"Empty dataframe for {model}")
+            else:
+                st.warning(f"No matching file found for {model} on {selected_date}")
+                
         except Exception as e:
-            st.error(f"Error loading {model}: {str(e)}")
-            pass
+            st.error(f"Error processing {model}: {str(e)}")
+            import traceback
+            st.error(traceback.format_exc())
             
     # Combine forecasts
     if forecasts:
