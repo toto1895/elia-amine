@@ -704,12 +704,15 @@ def benchmark():
         progress_text = st.empty()
         
         for i, model in enumerate(models):
-            progress_text.text(f"Processing model: {model}")
-            result = process_model(model, selected_date)
-            if result is not None:
-                forecasts[model] = result
-                st.success(f"Successfully loaded data for {model}")
-            progress_bar.progress((i + 1) / len(models))
+            if (model =='oracle') and (pd.to_datetime(selected_date)< pd.to_datetime('2025-03-04')):
+                pass
+            else:
+                progress_text.text(f"Processing model: {model}")
+                result = process_model(model, selected_date)
+                if result is not None:
+                    forecasts[model] = result
+                    #st.success(f"Successfully loaded data for {model}")
+                progress_bar.progress((i + 1) / len(models))
         
         progress_bar.empty()
         progress_text.empty()
