@@ -715,7 +715,6 @@ def benchmark():
                                         st.write(f"File downloaded to temporary location: {temp_file.name}")
                                         
                                         # Read the parquet file using pandas
-                                        import pandas as pd
                                         df = pd.read_parquet(temp_file.name)
                                         
                                         st.write(f"Parquet file loaded, shape: {df.shape}")
