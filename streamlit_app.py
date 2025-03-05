@@ -616,7 +616,7 @@ def benchmark():
             latest_actual = pd.DataFrame()
 
         # Fetch model forecasts
-        models = ['avg', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+        models = ['avg', 'oracle','metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
         forecasts = []
         
         for model in models:
@@ -625,10 +625,7 @@ def benchmark():
 
                 # Base path for this model
                 model_path = f"oracle_predictions/predico-elia/forecasts/{model}"
-                st.write(f"Looking for files in: {model_path}")
-                
-                # Approach: Find files, then immediately process the most relevant one
-                all_files = []
+                #st.write(f"Looking for files in: {model_path}")
                 
                 # List files for this model
                 try:
@@ -641,7 +638,7 @@ def benchmark():
                     
                     # Filter out directory entries and non-parquet files
                     valid_files = [f for f in files if f.endswith(".parquet") and not f.endswith('/')]
-                    st.write(f"Found {len(valid_files)} valid parquet files")
+                    #st.write(f"Found {len(valid_files)} valid parquet files")
                     
                     if len(valid_files) > 0:
                         st.write(f"First few files: {valid_files[-3:]}")
@@ -689,7 +686,7 @@ def benchmark():
                                 best_match = date_file_pairs[0][1]
                             
                             if best_match:
-                                st.write(f"Selected file for {model}: {best_match}")
+                                #st.write(f"Selected file for {model}: {best_match}")
                                 
                                 # IMMEDIATE LOADING: Read the file right after finding it
                                 try:
@@ -706,18 +703,18 @@ def benchmark():
                                     bucket = storage_client.bucket(bucket_name)
                                     blob = bucket.blob(blob_name)
                                     
-                                    st.write(f"Attempting to download blob: {blob_name}")
+                                    #st.write(f"Attempting to download blob: {blob_name}")
                                     
                                     # Download to a temporary file
                                     import tempfile
                                     with tempfile.NamedTemporaryFile(suffix='.parquet') as temp_file:
                                         blob.download_to_filename(temp_file.name)
-                                        st.write(f"File downloaded to temporary location: {temp_file.name}")
+                                        #st.write(f"File downloaded to temporary location: {temp_file.name}")
                                         
                                         # Read the parquet file using pandas
                                         df = pd.read_parquet(temp_file.name)
                                         
-                                        st.write(f"Parquet file loaded, shape: {df.shape}")
+                                        #st.write(f"Parquet file loaded, shape: {df.shape}")
                                         
                                     # Process columns
                                     try:
