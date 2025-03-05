@@ -433,6 +433,7 @@ def benchmark():
         st.cache_resource.clear()
         st.cache_data.clear()
         st.write("Cache cleared!")
+        time.sleep(5)
 
     st.title("Benchmark Models")
     conn = st.connection('gcs', type=FilesConnection)
@@ -614,11 +615,11 @@ def run_forecast_job():
     
     # Wait for the job to complete
     import time
-    time.sleep(30)
+    time.sleep(5)
     
     # Run the oracle submission job
     st.write('Preparing to generate oracle...', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
-    response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/oracle_v2")
+    response = client.run_job(name=f"projects/{project_id}/locations/{region}/jobs/oraclepredictions")
     st.write('Oracle submitted', pd.Timestamp.now('CET').strftime('%Y-%m-%d %H:%M:%S'))
 
 # Main application
