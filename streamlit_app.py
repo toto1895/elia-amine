@@ -574,6 +574,9 @@ def submission_viewer():
         import traceback
         st.error(traceback.format_exc())
 
+def get_conn():
+    return st.connection('gcs', type=FilesConnection)
+
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
@@ -585,7 +588,7 @@ def benchmark():
     st.title("Benchmark Models")
     
     try:
-        conn = st.connection('gcs', type=FilesConnection)
+        conn = get_conn()
         selected_date = st.date_input("Submission date", pd.to_datetime("today"))
         
         try:
@@ -609,8 +612,8 @@ def benchmark():
                 
                 # Show all possible paths we're trying
                 possible_paths = [
-                    f"{bucket_name}/predico-elia/forecasts/{model}",
-                    f"your-bucket-name/oracle_predictions/predico-elia/forecasts/{model}"
+                    f"{bucket_name}/predico-elia/forecasts/{model}"
+                    #f"your-bucket-name/oracle_predictions/predico-elia/forecasts/{model}"
                 ]
                 st.write(f"Trying paths: {possible_paths}")
                 
@@ -622,7 +625,7 @@ def benchmark():
                         try:
                             res = conn._instance.ls(
                                 f"oracle_predictions/predico-elia/forecasts/{model}",
-                                max_results=100000,
+                                max_results=1000,
                                 page_token=token
                             )
                             
