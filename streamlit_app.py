@@ -723,6 +723,12 @@ def benchmark():
                 df = pd.concat(list(forecasts.values()), axis=1)
                 df.index = pd.to_datetime(df.index)
                 
+                # Store the meteofrance DataFrame for download
+                meteofrance_df = None
+                if 'meteofrance' in forecasts:
+                    meteofrance_df = forecasts['meteofrance'].copy()
+                    meteofrance_df.index = pd.to_datetime(meteofrance_df.index)
+                
                 try:
                     if not latest_actual.empty:
                         df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
@@ -779,6 +785,23 @@ def benchmark():
                 )
 
                 st.plotly_chart(fig)
+
+                # Add download button for meteofrance data
+                if meteofrance_df is not None:
+                    # Function to convert dataframe to CSV for download
+                    def convert_df_to_csv(df):
+                        return df.to_csv().encode('utf-8')
+                    
+                    # Create a download button
+                    meteofrance_csv = convert_df_to_csv(meteofrance_df)
+                    st.download_button(
+                        label="Download Meteofrance Data as CSV",
+                        data=meteofrance_csv,
+                        file_name=f"meteofrance_forecast_{selected_date.strftime('%Y-%m-%d')}.csv",
+                        mime="text/csv",
+                    )
+                else:
+                    st.warning("Meteofrance data is not available for download.")
 
                 # Compute scores only if actual data exists
                 if 'actual' in df.columns:
@@ -840,6 +863,8 @@ def benchmark():
             st.warning("No forecast data available for the selected date.")
     except Exception as e:
         st.error(f"Error in benchmark function: {e}")
+
+
 def overview():
     """Show rankings and profit/loss overview."""
     # Add password protection
