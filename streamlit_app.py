@@ -726,7 +726,7 @@ def benchmark():
                 # Store the meteofrance DataFrame for download
                 meteofrance_df = None
                 if 'meteofrance' in forecasts:
-                    meteofrance_df = forecasts['meteofrance'].copy()
+                    meteofrance_df = forecasts['meteofrance'].copy().round(1)
                     meteofrance_df.index = pd.to_datetime(meteofrance_df.index)
                     meteofrance_df.columns = ['q10','q50','q90']
                 
