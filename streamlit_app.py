@@ -728,6 +728,7 @@ def benchmark():
                 if 'meteofrance' in forecasts:
                     meteofrance_df = forecasts['meteofrance'].copy()
                     meteofrance_df.index = pd.to_datetime(meteofrance_df.index)
+                    meteofrance_df.columns = ['q10','q50','q90']
                 
                 try:
                     if not latest_actual.empty:
@@ -795,9 +796,9 @@ def benchmark():
                     # Create a download button
                     meteofrance_csv = convert_df_to_csv(meteofrance_df)
                     st.download_button(
-                        label="Download Meteofrance Data as CSV",
+                        label="Download Data as CSV",
                         data=meteofrance_csv,
-                        file_name=f"meteofrance_forecast_{selected_date.strftime('%Y-%m-%d')}.csv",
+                        file_name=f"{selected_date.strftime('%Y-%m-%d')}.csv",
                         mime="text/csv",
                     )
                 else:
