@@ -591,7 +591,6 @@ def list_blobs_in_bucket(bucket_name, prefix=None):
     
     print(f"Files in bucket {bucket_name} with prefix {prefix}:")
     return [blob.name for blob in blobs]  # Return the list of blob names
-
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
@@ -762,11 +761,15 @@ def benchmark():
                     blob.download_to_filename(temp_file.name)
                     df = pd.read_parquet(temp_file.name)
                 
-                # Check if the required column exists
+                # Check if the required column exists (try both possible naming conventions)
                 if 'ratio_GAOFO-1' in df.columns:
                     # Extract just the needed column and multiply by 2263
                     uk_data = df[['ratio_GAOFO-1']].copy()
                     uk_data['uk-test'] = uk_data['ratio_GAOFO-1'] * 2263
+                elif 'ratio-GAOFO-1' in df.columns:
+                    # Extract just the needed column and multiply by 2263
+                    uk_data = df[['ratio-GAOFO-1']].copy()
+                    uk_data['uk-test'] = uk_data['ratio-GAOFO-1'] * 2263
                     
                     # Keep only the calculated column
                     uk_data = uk_data[['uk-test']]
@@ -775,7 +778,7 @@ def benchmark():
                 else:
                     # If column doesn't exist, log error and return None
                     column_list = ", ".join(df.columns.tolist())
-                    st.warning(f"Column 'ratio_GAOFO-1' not found in UK data file. Available columns: {column_list}")
+                    st.warning(f"Columns 'ratio_GAOFO-1' or 'ratio-GAOFO-1' not found in UK data file. Available columns: {column_list}")
                     return None
             except Exception as e:
                 st.error(f"Error processing UK data file: {str(e)}")
@@ -799,6 +802,29 @@ def benchmark():
         progress_text.text("Processing UK data...")
         uk_data = get_uk_data(selected_date)
         if uk_data is not None:
+            # Make sure UK data has datetime index to match other forecasts
+            if not isinstance(uk_data.index, pd.DatetimeIndex):
+                # If uk_data doesn't have datetime index, we need to align it
+                # This is a fallback - ideally the file should have proper datetime index
+                if not forecasts:
+                    st.warning("Cannot align UK data - no reference timestamps available from other forecasts")
+                else:
+                    # Use timestamps from another forecast if available
+                    reference_df = next(iter(forecasts.values()))
+                    if len(uk_data) == len(reference_df):
+                        uk_data.index = reference_df.index
+                    else:
+                        # If lengths don't match, try to align by repeating/interpolating
+                        st.warning("UK data rows don't match other forecasts - attempting interpolation")
+                        temp_index = pd.date_range(
+                            start=pd.Timestamp(selected_date) + pd.Timedelta(days=1),
+                            periods=len(uk_data), 
+                            freq='15min'
+                        )
+                        uk_data.index = temp_index
+                        # Resample to match reference index
+                        uk_data = uk_data.reindex(reference_df.index, method='nearest')
+            
             forecasts['uk'] = uk_data
             
         progress_bar.empty()
@@ -912,7 +938,7 @@ def benchmark():
                         x=df.index,
                         y=df['uk-test'],
                         mode='lines',
-                        name='UK Test (ratio_GAOFO-1 × 2263)',
+                        name='UK Test (ratio-GAOFO-1 × 2263)',
                         line_color='pink'
                     ))
                     
