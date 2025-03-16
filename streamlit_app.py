@@ -763,10 +763,10 @@ def benchmark():
                     df = pd.read_parquet(temp_file.name)
                 
                 # Check if the required column exists
-                if 'ratio-GAOFO-1' in df.columns:
+                if 'ratio_GAOFO-1' in df.columns:
                     # Extract just the needed column and multiply by 2263
-                    uk_data = df[['ratio-GAOFO-1']].copy()
-                    uk_data['uk-test'] = uk_data['ratio-GAOFO-1'] * 2263
+                    uk_data = df[['ratio_GAOFO-1']].copy()
+                    uk_data['uk-test'] = uk_data['ratio_GAOFO-1'] * 2263
                     
                     # Keep only the calculated column
                     uk_data = uk_data[['uk-test']]
@@ -775,7 +775,7 @@ def benchmark():
                 else:
                     # If column doesn't exist, log error and return None
                     column_list = ", ".join(df.columns.tolist())
-                    st.warning(f"Column 'ratio-GAOFO-1' not found in UK data file. Available columns: {column_list}")
+                    st.warning(f"Column 'ratio_GAOFO-1' not found in UK data file. Available columns: {column_list}")
                     return None
             except Exception as e:
                 st.error(f"Error processing UK data file: {str(e)}")
@@ -912,7 +912,7 @@ def benchmark():
                         x=df.index,
                         y=df['uk-test'],
                         mode='lines',
-                        name='UK Test (ratio-GAOFO-1 × 2263)',
+                        name='UK Test (ratio_GAOFO-1 × 2263)',
                         line_color='pink'
                     ))
                     
