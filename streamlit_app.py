@@ -788,7 +788,7 @@ def benchmark():
                     
                     # Extract just the needed column and multiply by 2263
                     uk_data = df[[column_name]].copy()
-                    uk_data['uk-test'] = uk_data[column_name] * 2263
+                    uk_data['uk-test'] = uk_data[column_name] * 2150
                     
                     # Drop the original column, keeping only the calculated one
                     uk_data = uk_data[['uk-test']]
@@ -833,7 +833,7 @@ def benchmark():
         
         # Load UK data after processing models
         progress_text.text("Processing UK data...")
-        uk_data = get_uk_data(selected_date) * 0.5
+        uk_data = get_uk_data(selected_date) 
         print(uk_data)
         
         forecasts['uk'] = uk_data[result.index[0]:result.index[-1]]
