@@ -832,31 +832,8 @@ def benchmark():
         # Load UK data after processing models
         progress_text.text("Processing UK data...")
         uk_data = get_uk_data(selected_date)
-        if uk_data is not None:
-            # Make sure UK data has datetime index to match other forecasts
-            if not isinstance(uk_data.index, pd.DatetimeIndex):
-                # If uk_data doesn't have datetime index, we need to align it
-                # This is a fallback - ideally the file should have proper datetime index
-                if not forecasts:
-                    st.warning("Cannot align UK data - no reference timestamps available from other forecasts")
-                else:
-                    # Use timestamps from another forecast if available
-                    reference_df = next(iter(forecasts.values()))
-                    if len(uk_data) == len(reference_df):
-                        uk_data.index = reference_df.index
-                    else:
-                        # If lengths don't match, try to align by repeating/interpolating
-                        st.warning("UK data rows don't match other forecasts - attempting interpolation")
-                        temp_index = pd.date_range(
-                            start=pd.Timestamp(selected_date) + pd.Timedelta(days=1),
-                            periods=len(uk_data), 
-                            freq='15min'
-                        )
-                        uk_data.index = temp_index
-                        # Resample to match reference index
-                        uk_data = uk_data.reindex(reference_df.index, method='nearest')
-            
-            forecasts['uk'] = uk_data
+        
+        forecasts['uk'] = uk_data[forecasts.index[0]:forecasts.index[-1]]
             
         progress_bar.empty()
         progress_text.empty()
@@ -961,35 +938,6 @@ def benchmark():
                 else:
                     st.warning("Meteofrance data is not available for download.")
 
-                # Display UK test data separately if available
-                if 'uk-test' in df.columns:
-                    st.subheader("UK Test Data")
-                    uk_fig = go.Figure()
-                    uk_fig.add_trace(go.Scatter(
-                        x=df.index,
-                        y=df['uk-test'],
-                        mode='lines',
-                        name='UK Test (ratio-GAOFO-1 × 2263)',
-                        line_color='pink'
-                    ))
-                    
-                    if 'actual' in df.columns:
-                        uk_fig.add_trace(go.Scatter(
-                            x=df.index,
-                            y=df['actual'],
-                            mode='lines',
-                            name='Actual',
-                            line_color='white'
-                        ))
-                    
-                    uk_fig.update_layout(
-                        xaxis_title="Datetime",
-                        yaxis_title="MW",
-                        yaxis=dict(range=[0, 2300]),
-                        template="plotly_dark"
-                    )
-                    
-                    st.plotly_chart(uk_fig)
 
                 # Compute scores only if actual data exists
                 if 'actual' in df.columns:
