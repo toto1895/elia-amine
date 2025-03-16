@@ -833,7 +833,7 @@ def benchmark():
         progress_text.text("Processing UK data...")
         uk_data = get_uk_data(selected_date)
         
-        forecasts['uk'] = uk_data[forecasts.index[0]:forecasts.index[-1]]
+        forecasts['uk'] = uk_data[result.index[0]:result.index[-1]]
             
         progress_bar.empty()
         progress_text.empty()
