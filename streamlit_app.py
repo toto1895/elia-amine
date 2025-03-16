@@ -768,7 +768,8 @@ def benchmark():
                     column_name = 'ratio_GAOFO-1'
                 elif 'ratio-GAOFO-1' in df.columns:
                     column_name = 'ratio-GAOFO-1'
-                column_name = 'EAAO-1'
+                
+                column_name = 'ratio_EAAO-1'
                     
                 if column_name:
                     # Make sure we have a datetime index
