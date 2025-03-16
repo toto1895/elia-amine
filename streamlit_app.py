@@ -791,7 +791,7 @@ def benchmark():
                     uk_data['uk-test'] = uk_data[column_name] * 2263
                     
                     # Drop the original column, keeping only the calculated one
-                    uk_data = uk_data[['uk-test']] * 0.5
+                    uk_data = uk_data[['uk-test']]
                     
                     # Ensure the index is timezone-aware to match other data
                     if uk_data.index.tz is None:
@@ -805,7 +805,7 @@ def benchmark():
                     uk_resampled = uk_data.resample('15min').interpolate(method='linear')
                     st.info(f"UK data resampled from {len(uk_data)} to {len(uk_resampled)} rows (15-minute intervals)")
                     
-                    return uk_resampled
+                    return uk_resampled * 0.5
                 else:
                     # If column doesn't exist, log error and return None
                     column_list = ", ".join(df.columns.tolist())
