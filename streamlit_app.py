@@ -783,15 +783,15 @@ def benchmark():
                             # Create a synthetic datetime index based on selected_date
                             start_time = pd.Timestamp(selected_date) + pd.Timedelta(days=1)
                             # Assume hourly data if we can't determine the frequency
-                            df.index = pd.date_range(start=start_time, periods=len(df), freq='H')
+                            df.index = pd.date_range(start=start_time, periods=len(df), freq='30min')
                             st.warning("UK data has no datetime index. Created synthetic hourly timestamps.")
                     
                     # Extract just the needed column and multiply by 2263
                     uk_data = df[[column_name]].copy()
-                    uk_data['uk-test'] = 0.5 * uk_data[column_name] * 2263
+                    uk_data['uk-test'] = uk_data[column_name] * 2263
                     
                     # Drop the original column, keeping only the calculated one
-                    uk_data = uk_data[['uk-test']]
+                    uk_data = uk_data[['uk-test']] * 0.5
                     
                     # Ensure the index is timezone-aware to match other data
                     if uk_data.index.tz is None:
