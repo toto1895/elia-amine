@@ -700,7 +700,7 @@ def benchmark():
                 return None
                 
         # Function to load UK data from neso_data
-        @st.cache_data(ttl=60, show_spinner=False)
+        
         def get_uk_data(selected_date):
             try:
                 # List files from the neso_data/dayahead directory
