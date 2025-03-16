@@ -805,7 +805,7 @@ def benchmark():
                     uk_resampled = uk_data.resample('15min').interpolate(method='linear')
                     st.info(f"UK data resampled from {len(uk_data)} to {len(uk_resampled)} rows (15-minute intervals)")
                     
-                    return uk_resampled * 0.5
+                    return uk_resampled
                 else:
                     # If column doesn't exist, log error and return None
                     column_list = ", ".join(df.columns.tolist())
@@ -833,7 +833,7 @@ def benchmark():
         
         # Load UK data after processing models
         progress_text.text("Processing UK data...")
-        uk_data = get_uk_data(selected_date)
+        uk_data = get_uk_data(selected_date) * 0.5
         
         forecasts['uk'] = uk_data[result.index[0]:result.index[-1]]
             
