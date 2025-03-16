@@ -591,6 +591,7 @@ def list_blobs_in_bucket(bucket_name, prefix=None):
     
     print(f"Files in bucket {bucket_name} with prefix {prefix}:")
     return [blob.name for blob in blobs]  # Return the list of blob names
+
 def benchmark():
     """Benchmark different forecasting models."""
     if st.button("Clear Cache"):
@@ -762,19 +763,47 @@ def benchmark():
                     df = pd.read_parquet(temp_file.name)
                 
                 # Check if the required column exists (try both possible naming conventions)
+                column_name = None
                 if 'ratio_GAOFO-1' in df.columns:
-                    # Extract just the needed column and multiply by 2263
-                    uk_data = df[['ratio_GAOFO-1']].copy()
-                    uk_data['uk-test'] = uk_data['ratio_GAOFO-1'] * 2263
+                    column_name = 'ratio_GAOFO-1'
                 elif 'ratio-GAOFO-1' in df.columns:
-                    # Extract just the needed column and multiply by 2263
-                    uk_data = df[['ratio-GAOFO-1']].copy()
-                    uk_data['uk-test'] = uk_data['ratio-GAOFO-1'] * 2263
+                    column_name = 'ratio-GAOFO-1'
                     
-                    # Keep only the calculated column
+                if column_name:
+                    # Make sure we have a datetime index
+                    if not isinstance(df.index, pd.DatetimeIndex):
+                        # Check if there's a datetime column we can use
+                        datetime_cols = [col for col in df.columns if 'time' in col.lower() or 'date' in col.lower()]
+                        if datetime_cols:
+                            # Use the first column that looks like a datetime column
+                            df.index = pd.to_datetime(df[datetime_cols[0]])
+                        else:
+                            # Create a synthetic datetime index based on selected_date
+                            start_time = pd.Timestamp(selected_date) + pd.Timedelta(days=1)
+                            # Assume hourly data if we can't determine the frequency
+                            df.index = pd.date_range(start=start_time, periods=len(df), freq='H')
+                            st.warning("UK data has no datetime index. Created synthetic hourly timestamps.")
+                    
+                    # Extract just the needed column and multiply by 2263
+                    uk_data = df[[column_name]].copy()
+                    uk_data['uk-test'] = uk_data[column_name] * 2263
+                    
+                    # Drop the original column, keeping only the calculated one
                     uk_data = uk_data[['uk-test']]
                     
-                    return uk_data
+                    # Ensure the index is timezone-aware to match other data
+                    if uk_data.index.tz is None:
+                        uk_data.index = uk_data.index.tz_localize('UTC')
+                    
+                    # Resample to 15-minute intervals
+                    # First, ensure the index is sorted
+                    uk_data = uk_data.sort_index()
+                    
+                    # Resample to 15-minute intervals
+                    uk_resampled = uk_data.resample('15min').interpolate(method='linear')
+                    st.info(f"UK data resampled from {len(uk_data)} to {len(uk_resampled)} rows (15-minute intervals)")
+                    
+                    return uk_resampled
                 else:
                     # If column doesn't exist, log error and return None
                     column_list = ", ".join(df.columns.tolist())
@@ -782,6 +811,8 @@ def benchmark():
                     return None
             except Exception as e:
                 st.error(f"Error processing UK data file: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
                 return None
         
         # Use a progress bar and process models
