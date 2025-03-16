@@ -834,6 +834,7 @@ def benchmark():
         # Load UK data after processing models
         progress_text.text("Processing UK data...")
         uk_data = get_uk_data(selected_date) * 0.5
+        print(uk_data)
         
         forecasts['uk'] = uk_data[result.index[0]:result.index[-1]]
             
