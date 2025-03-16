@@ -769,7 +769,7 @@ def benchmark():
                 elif 'ratio-GAOFO-1' in df.columns:
                     column_name = 'ratio-GAOFO-1'
                 
-                column_name = 'ratio_EAAO-1'
+                #column_name = 'ratio_EAAO-1'
                     
                 if column_name:
                     # Make sure we have a datetime index
@@ -788,7 +788,7 @@ def benchmark():
                     
                     # Extract just the needed column and multiply by 2263
                     uk_data = df[[column_name]].copy()
-                    uk_data['uk-test'] = uk_data[column_name] * 2263
+                    uk_data['uk-test'] = 0.5 * uk_data[column_name] * 2263
                     
                     # Drop the original column, keeping only the calculated one
                     uk_data = uk_data[['uk-test']]
