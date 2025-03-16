@@ -698,6 +698,88 @@ def benchmark():
                 
             except Exception:
                 return None
+                
+        # Function to load UK data from neso_data
+        @st.cache_data(ttl=60, show_spinner=False)
+        def get_uk_data(selected_date):
+            try:
+                # List files from the neso_data/dayahead directory
+                prefix = 'neso_data/dayahead'
+                blobs = list(bucket.list_blobs(prefix=prefix))
+                
+                # Filter for parquet files
+                valid_files = [blob.name for blob in blobs if blob.name.endswith(".parquet")]
+                
+                if not valid_files:
+                    return None
+                
+                # Extract date info and find relevant file
+                date_file_pairs = []
+                for file in valid_files:
+                    try:
+                        # Try to extract date from filename pattern
+                        filename = file.split('/')[-1]
+                        parts = filename.split('_')
+                        # Different file naming pattern might be present
+                        # Try to find date components in the filename
+                        if len(parts) >= 2:
+                            # This is a simplified approach - adapt based on actual file naming
+                            date_parts = [part for part in parts if len(part) >= 8 and part.isdigit()]
+                            if date_parts:
+                                date_str = date_parts[0]
+                                year = int(date_str[:4])
+                                month = int(date_str[4:6])
+                                day = int(date_str[6:8])
+                                file_date = pd.Timestamp(year=year, month=month, day=day)
+                                date_file_pairs.append((file_date, file))
+                    except Exception as e:
+                        continue
+                
+                if not date_file_pairs:
+                    # If no date parsing worked, just use the latest file
+                    latest_file = sorted(valid_files)[-1]
+                    return process_uk_file(latest_file)
+                
+                # Sort by date and find closest match
+                date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
+                best_match = date_file_pairs[0][1] if date_file_pairs else None
+                
+                if not best_match:
+                    return None
+                    
+                return process_uk_file(best_match)
+                
+            except Exception as e:
+                st.error(f"Error retrieving UK data: {str(e)}")
+                return None
+                
+        def process_uk_file(file_path):
+            try:
+                # Download and load the file
+                blob = bucket.blob(file_path)
+                
+                with tempfile.NamedTemporaryFile(suffix='.parquet', delete=True) as temp_file:
+                    blob.download_to_filename(temp_file.name)
+                    df = pd.read_parquet(temp_file.name)
+                
+                # Check if the required column exists
+                if 'ratio-GAOFO-1' in df.columns:
+                    # Extract just the needed column and multiply by 2263
+                    uk_data = df[['ratio-GAOFO-1']].copy()
+                    uk_data['uk-test'] = uk_data['ratio-GAOFO-1'] * 2263
+                    
+                    # Keep only the calculated column
+                    uk_data = uk_data[['uk-test']]
+                    
+                    return uk_data
+                else:
+                    # If column doesn't exist, log error and return None
+                    column_list = ", ".join(df.columns.tolist())
+                    st.warning(f"Column 'ratio-GAOFO-1' not found in UK data file. Available columns: {column_list}")
+                    return None
+            except Exception as e:
+                st.error(f"Error processing UK data file: {str(e)}")
+                return None
         
         # Use a progress bar and process models
         progress_bar = st.progress(0)
@@ -711,9 +793,14 @@ def benchmark():
                 result = process_model(model, selected_date)
                 if result is not None:
                     forecasts[model] = result
-                    #st.success(f"Successfully loaded data for {model}")
                 progress_bar.progress((i + 1) / len(models))
         
+        # Load UK data after processing models
+        progress_text.text("Processing UK data...")
+        uk_data = get_uk_data(selected_date)
+        if uk_data is not None:
+            forecasts['uk'] = uk_data
+            
         progress_bar.empty()
         progress_text.empty()
         
@@ -735,13 +822,25 @@ def benchmark():
                         df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
                         default_cols = ['actual', 'DA elia (11AM)', 'oracle_0.5','avg_0.5', 'icon_0.5', 'metno_0.5', 
                                       'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                        
+                        # Add UK data to default columns if available
+                        if 'uk-test' in df.columns:
+                            default_cols.append('uk-test')
                     else:
                         default_cols = ['DA elia (11AM)', 'oracle_0.5', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
                                        'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                        
+                        # Add UK data to default columns if available
+                        if 'uk-test' in df.columns:
+                            default_cols.append('uk-test')
                 except Exception as e:
                     st.error(f"Error merging latest actual data: {e}")
                     default_cols = ['avg_0.5', 'icon_0.5', 'metno_0.5', 
                                    'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                    
+                    # Add UK data to default columns if available
+                    if 'uk-test' in df.columns:
+                        default_cols.append('uk-test')
 
                 df = df.iloc[-96:].copy()
                 
@@ -755,7 +854,8 @@ def benchmark():
                     'meteofrance_0.5': 'purple',
                     'knmi_0.5': 'grey',
                     'icon_0.5': 'yellow',
-                    'oracle_0.5': 'blue'
+                    'oracle_0.5': 'blue',
+                    'uk-test': 'pink'  # Add color for UK data
                 }
 
                 # Create plot more efficiently
@@ -804,6 +904,36 @@ def benchmark():
                 else:
                     st.warning("Meteofrance data is not available for download.")
 
+                # Display UK test data separately if available
+                if 'uk-test' in df.columns:
+                    st.subheader("UK Test Data")
+                    uk_fig = go.Figure()
+                    uk_fig.add_trace(go.Scatter(
+                        x=df.index,
+                        y=df['uk-test'],
+                        mode='lines',
+                        name='UK Test (ratio-GAOFO-1 × 2263)',
+                        line_color='pink'
+                    ))
+                    
+                    if 'actual' in df.columns:
+                        uk_fig.add_trace(go.Scatter(
+                            x=df.index,
+                            y=df['actual'],
+                            mode='lines',
+                            name='Actual',
+                            line_color='white'
+                        ))
+                    
+                    uk_fig.update_layout(
+                        xaxis_title="Datetime",
+                        yaxis_title="MW",
+                        yaxis=dict(range=[0, 2300]),
+                        template="plotly_dark"
+                    )
+                    
+                    st.plotly_chart(uk_fig)
+
                 # Compute scores only if actual data exists
                 if 'actual' in df.columns:
                     # Optimize score computation
@@ -841,6 +971,11 @@ def benchmark():
                         'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
                         'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5', 'oracle_0.5'
                     ]
+                    
+                    # Add UK test to columns for evaluation
+                    if 'uk-test' in all_cols:
+                        cols.append('uk-test')
+                        
                     cols = [col for col in cols if col in all_cols]
                     
                     # Get scores using cached function
@@ -864,7 +999,8 @@ def benchmark():
             st.warning("No forecast data available for the selected date.")
     except Exception as e:
         st.error(f"Error in benchmark function: {e}")
-
+        import traceback
+        st.error(traceback.format_exc())
 
 def overview():
     """Show rankings and profit/loss overview."""
