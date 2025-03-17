@@ -788,7 +788,7 @@ def benchmark():
                     
                     # Extract just the needed column and multiply by 2263
                     uk_data = df[[column_name]].copy()
-                    uk_data['uk-test'] = uk_data[column_name] * 2150
+                    uk_data['uk-test'] = uk_data[column_name] * 2263 * 0.6
                     
                     # Drop the original column, keeping only the calculated one
                     uk_data = uk_data[['uk-test']]
