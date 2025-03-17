@@ -617,7 +617,7 @@ def benchmark():
         latest_actual = get_cached_actual(selected_date)
 
         # Fetch model forecasts
-        models = ['avg', 'oracle', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi']
+        models = ['avg', 'oracle', 'metno', 'dmi_seamless', 'meteofrance', 'icon', 'knmi','tech']
         forecasts = {}  # Use dict for faster lookups
         
         # Create a client once outside the loop
@@ -858,14 +858,14 @@ def benchmark():
                     if not latest_actual.empty:
                         df = pd.concat([latest_actual.drop(columns='Datetime'), df], axis=1)
                         default_cols = ['actual', 'DA elia (11AM)', 'oracle_0.5','avg_0.5', 'icon_0.5', 'metno_0.5', 
-                                      'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                                      'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5','tech_0.5']
                         
                         # Add UK data to default columns if available
                         if 'uk-test' in df.columns:
                             default_cols.append('uk-test')
                     else:
                         default_cols = ['DA elia (11AM)', 'oracle_0.5', 'avg_0.5', 'icon_0.5', 'metno_0.5', 
-                                       'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                                       'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5','tech_0.5']
                         
                         # Add UK data to default columns if available
                         if 'uk-test' in df.columns:
@@ -873,7 +873,7 @@ def benchmark():
                 except Exception as e:
                     st.error(f"Error merging latest actual data: {e}")
                     default_cols = ['avg_0.5', 'icon_0.5', 'metno_0.5', 
-                                   'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5']
+                                   'dmi_seamless_0.5', 'meteofrance_0.5', 'knmi_0.5','tech_0.5']
                     
                     # Add UK data to default columns if available
                     if 'uk-test' in df.columns:
@@ -892,7 +892,8 @@ def benchmark():
                     'knmi_0.5': 'grey',
                     'icon_0.5': 'yellow',
                     'oracle_0.5': 'blue',
-                    'uk-test': 'pink'  # Add color for UK data
+                    'uk-test': 'pink',  # Add color for UK data
+                    'tech_0.5': 'cyan'  # Add color for UK data
                 }
 
                 # Create plot more efficiently
@@ -977,7 +978,7 @@ def benchmark():
                     all_cols = df.columns.tolist()
                     cols = [
                         'DA elia (11AM)', 'metno_0.5', 'meteofrance_0.5', 'avg_0.5',
-                        'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5', 'oracle_0.5'
+                        'icon_0.5', 'knmi_0.5', 'dmi_seamless_0.5', 'oracle_0.5','tech_0.5'
                     ]
                     
                     # Add UK test to columns for evaluation
