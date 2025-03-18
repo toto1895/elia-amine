@@ -879,7 +879,7 @@ def benchmark():
                     if 'uk-test' in df.columns:
                         default_cols.append('uk-test')
 
-                df = df.iloc[-96:].copy()
+                df = df.iloc[-96-8-3:-8].copy()
                 
                 # Pre-compute color mapping for faster plotting
                 color_map = {
