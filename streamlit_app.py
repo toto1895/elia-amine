@@ -1080,14 +1080,207 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-# Main application
+
+def solar_view():
+    """Display solar generation data and forecasts from Elia."""
+    st.subheader("Solar View")
+
+    try:
+        # Add a date selector
+        selected_date = st.date_input("Select date", pd.to_datetime("today"))
+        
+        # Add a refresh button
+        if st.button("Refresh Data"):
+            st.cache_data.clear()
+            st.success("Cache cleared! Data will be refreshed.")
+        
+        # Function to load solar data with caching
+        @st.cache_data(ttl=3600)  # Cache for 1 hour
+        def load_solar_data():
+            try:
+                st.info("Loading solar data from Elia...")
+                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
+                                       sep=';')
+                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
+                                     'Measured & upscaled','Day Ahead 11AM forecast',
+                                     'Most recent forecast']]
+                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
+                return latest_pv
+            except Exception as e:
+                st.error(f"Error loading solar data: {e}")
+                return pd.DataFrame()
+        
+        # Load the data
+        solar_data = load_solar_data()
+        
+        if solar_data.empty:
+            st.error("No solar data available")
+            return
+            
+        # Convert selected date to datetime with UTC timezone
+        selected_date_start = pd.Timestamp(selected_date).tz_localize('UTC')
+        selected_date_end = selected_date_start + pd.Timedelta(days=1)
+        
+        # Filter data for the selected date
+        filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_start) & 
+                                  (solar_data['Datetime'] < selected_date_end)]
+        
+        # Show data availability
+        if filtered_data.empty:
+            st.warning(f"No data available for {selected_date}")
+            # Show the most recent date with data
+            unique_dates = solar_data['Datetime'].dt.date.unique()
+            if len(unique_dates) > 0:
+                st.info(f"Most recent data available for: {max(unique_dates)}")
+                # Automatically select the most recent date
+                most_recent = pd.Timestamp(max(unique_dates)).tz_localize('UTC')
+                filtered_data = solar_data[(solar_data['Datetime'] >= most_recent) & 
+                                         (solar_data['Datetime'] < most_recent + pd.Timedelta(days=1))]
+            else:
+                return
+        
+        # Display region selector
+        regions = filtered_data['Region'].unique()
+        selected_region = st.selectbox("Select Region", regions)
+        
+        # Filter by region
+        region_data = filtered_data[filtered_data['Region'] == selected_region]
+        
+        # Display some summary statistics
+        st.subheader(f"Solar generation for {selected_region} on {region_data['Datetime'].dt.date.iloc[0]}")
+        
+        max_capacity = region_data['Monitored capacity'].max()
+        max_generation = region_data['Measured & upscaled'].max()
+        capacity_factor = (region_data['Measured & upscaled'].mean() / max_capacity * 100) if max_capacity > 0 else 0
+        
+        # Create metrics row
+        col1, col2, col3 = st.columns(3)
+        col1.metric("Max Capacity (MW)", f"{max_capacity:.1f}")
+        col2.metric("Peak Generation (MW)", f"{max_generation:.1f}")
+        col3.metric("Capacity Factor (%)", f"{capacity_factor:.1f}")
+        
+        # Plot the data
+        fig = go.Figure()
+        
+        # Add measured data
+        fig.add_trace(
+            go.Scatter(
+                x=region_data['Datetime'],
+                y=region_data['Measured & upscaled'],
+                name='Measured & upscaled',
+                mode='lines',
+                line_color='gold'
+            )
+        )
+        
+        # Add day ahead forecast
+        fig.add_trace(
+            go.Scatter(
+                x=region_data['Datetime'],
+                y=region_data['Day Ahead 11AM forecast'],
+                name='Day Ahead 11AM forecast',
+                mode='lines',
+                line_color='orange'
+            )
+        )
+        
+        # Add most recent forecast
+        fig.add_trace(
+            go.Scatter(
+                x=region_data['Datetime'],
+                y=region_data['Most recent forecast'],
+                name='Most recent forecast',
+                mode='lines',
+                line_color='red'
+            )
+        )
+        
+        # Add capacity as a reference line
+        fig.add_trace(
+            go.Scatter(
+                x=region_data['Datetime'],
+                y=region_data['Monitored capacity'],
+                name='Monitored capacity',
+                mode='lines',
+                line=dict(color='gray', dash='dash'),
+                visible='legendonly'  # Hide by default but available in legend
+            )
+        )
+        
+        # Update layout
+        fig.update_layout(
+            xaxis_title="Time",
+            yaxis_title="MW",
+            template="plotly_dark",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+            height=500
+        )
+        
+        st.plotly_chart(fig, use_container_width=True)
+        
+        # Calculate forecast accuracy
+        if st.checkbox("Show Forecast Accuracy"):
+            st.subheader("Forecast Accuracy")
+            
+            # Filter for rows with both actual and forecast data
+            accuracy_data = region_data.dropna(subset=['Measured & upscaled', 'Day Ahead 11AM forecast'])
+            
+            if not accuracy_data.empty:
+                # Calculate error metrics
+                rmse = calculate_rmse(accuracy_data['Measured & upscaled'], accuracy_data['Day Ahead 11AM forecast'])
+                mae = np.mean(np.abs(accuracy_data['Measured & upscaled'] - accuracy_data['Day Ahead 11AM forecast']))
+                mape = np.mean(np.abs((accuracy_data['Measured & upscaled'] - accuracy_data['Day Ahead 11AM forecast']) / 
+                                    accuracy_data['Measured & upscaled'])) * 100
+                
+                # Create error metrics row
+                col1, col2, col3 = st.columns(3)
+                col1.metric("RMSE (MW)", f"{rmse:.2f}")
+                col2.metric("MAE (MW)", f"{mae:.2f}")
+                col3.metric("MAPE (%)", f"{mape:.2f}")
+                
+                # Plot error distribution
+                error = accuracy_data['Day Ahead 11AM forecast'] - accuracy_data['Measured & upscaled']
+                
+                fig_error = go.Figure()
+                fig_error.add_trace(
+                    go.Scatter(
+                        x=accuracy_data['Datetime'],
+                        y=error,
+                        mode='lines',
+                        name='Forecast Error',
+                        line_color='red'
+                    )
+                )
+                
+                fig_error.update_layout(
+                    title="Forecast Error (Forecast - Actual)",
+                    xaxis_title="Time",
+                    yaxis_title="Error (MW)",
+                    template="plotly_dark",
+                    height=300
+                )
+                
+                st.plotly_chart(fig_error, use_container_width=True)
+            else:
+                st.warning("Insufficient data to calculate forecast accuracy")
+        
+        # Show raw data table if requested
+        if st.checkbox("Show Raw Data"):
+            st.dataframe(region_data)
+            
+    except Exception as e:
+        st.error(f"Error in solar view: {e}")
+        import traceback
+        st.error(traceback.format_exc())
+
+
 def main():
     st.sidebar.title("Navigation")
     
     if st.sidebar.button("Generate forecast"):
         run_forecast_job()
 
-    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview", "Benchmark"])
+    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview", "Benchmark", "Solar View"])
     
     if page_choice == "Submission Viewer":
         submission_viewer()
@@ -1095,6 +1288,8 @@ def main():
         overview()
     elif page_choice == "Benchmark":
         benchmark()
+    elif page_choice == "Solar View":
+        solar_view()
 
 if __name__ == "__main__":
     main()
