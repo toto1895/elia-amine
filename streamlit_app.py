@@ -1234,6 +1234,7 @@ def solar_view():
         # Filter data for the selected date
         filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_start) & 
                                 (solar_data['Datetime'] < selected_date_end)]
+        print(filtered_data)
         
         # Show data availability
         if filtered_data.empty:
