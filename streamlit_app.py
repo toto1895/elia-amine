@@ -1241,7 +1241,7 @@ def solar_view():
         
         # Create country-wide totals by summing all regions
         # Group by datetime and sum all numeric columns
-        total_data = filtered_data.groupby('Datetime').agg({
+        total_data = filtered_data.loc[filtered_data.Region=='Belgium',:].groupby('Datetime').agg({
             'Monitored capacity': 'sum',
             'Measured & upscaled': 'sum',
             'Day Ahead 11AM forecast': 'sum',
