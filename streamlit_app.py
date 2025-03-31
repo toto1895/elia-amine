@@ -1201,7 +1201,7 @@ def solar_view():
         progress_bar = st.progress(0)
         progress_text = st.empty()
         
-        models = ['dmi_seamless', 'icon_d2']
+        models = ['dmi_seamless', 'icon_d2', 'metno_seamless', 'meteofrance_seamless']
         forecasts = {}
         
         for i, model in enumerate(models):
@@ -1241,7 +1241,7 @@ def solar_view():
         
         # Create country-wide totals by summing all regions
         # Group by datetime and sum all numeric columns
-        total_data = filtered_data.loc[filtered_data.Region=='Belgium',:].groupby('Datetime').agg({
+        total_data = filtered_data.groupby('Datetime').agg({
             'Monitored capacity': 'sum',
             'Measured & upscaled': 'sum',
             'Day Ahead 11AM forecast': 'sum',
@@ -1386,13 +1386,93 @@ def solar_view():
                     line_color='purple'
                 )
             )
+            
+        # MetNo Seamless
+        if 'metno_seamless_p50' in plot_data.columns:
+            # Add uncertainty band (p10-p90) if available
+            if 'metno_seamless_p10' in plot_data.columns and 'metno_seamless_p90' in plot_data.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['metno_seamless_p90'],
+                        name='MetNo p90',
+                        mode='lines',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=False
+                    )
+                )
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['metno_seamless_p10'],
+                        name='MetNo range [p10-p90]',
+                        mode='lines',
+                        fill='tonexty',
+                        fillcolor='rgba(255, 0, 0, 0.2)',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=True
+                    )
+                )
+            
+            # Add p50 forecast
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_data['Datetime'],
+                    y=plot_data['metno_seamless_p50'],
+                    name='MetNo Seamless (p50)',
+                    mode='lines',
+                    line_color='red'
+                )
+            )
+            
+        # Meteofrance Seamless
+        if 'meteofrance_seamless_p50' in plot_data.columns:
+            # Add uncertainty band (p10-p90) if available
+            if 'meteofrance_seamless_p10' in plot_data.columns and 'meteofrance_seamless_p90' in plot_data.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['meteofrance_seamless_p90'],
+                        name='Meteofrance p90',
+                        mode='lines',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=False
+                    )
+                )
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['meteofrance_seamless_p10'],
+                        name='Meteofrance range [p10-p90]',
+                        mode='lines',
+                        fill='tonexty',
+                        fillcolor='rgba(0, 0, 255, 0.2)',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=True
+                    )
+                )
+            
+            # Add p50 forecast
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_data['Datetime'],
+                    y=plot_data['meteofrance_seamless_p50'],
+                    name='Meteofrance Seamless (p50)',
+                    mode='lines',
+                    line_color='blue'
+                )
+            )
         
         # Update layout with dynamic y-axis range for better visualization
         max_y_value = max([
             plot_data['Measured & upscaled'].max() if 'Measured & upscaled' in plot_data else 0,
             plot_data['Day Ahead 11AM forecast'].max() if 'Day Ahead 11AM forecast' in plot_data else 0,
             plot_data['dmi_seamless_p90'].max() if 'dmi_seamless_p90' in plot_data else 0,
-            plot_data['icon_d2_p90'].max() if 'icon_d2_p90' in plot_data else 0
+            plot_data['icon_d2_p90'].max() if 'icon_d2_p90' in plot_data else 0,
+            plot_data['metno_seamless_p90'].max() if 'metno_seamless_p90' in plot_data else 0,
+            plot_data['meteofrance_seamless_p90'].max() if 'meteofrance_seamless_p90' in plot_data else 0
         ])
         
         # Add a bit of margin (10%) to the max value for better visualization
@@ -1404,7 +1484,8 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=500,
-            title=f"Solar Generation in Belgium - Total of {max_capacity:.1f} MW Capacity"
+            title=f"Solar Generation in Belgium - Total of {max_capacity:.1f} MW Capacity",
+            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
         st.plotly_chart(fig, use_container_width=True)
@@ -1421,9 +1502,13 @@ def solar_view():
             if 'Day Ahead 11AM forecast' in accuracy_data.columns:
                 metrics_cols.append(('Day Ahead 11AM forecast', 'Elia Forecast'))
             if 'dmi_seamless_p50' in accuracy_data.columns:
-                metrics_cols.append(('dmi_seamless_p50', 'DMI Seamless p50'))
+                metrics_cols.append(('dmi_seamless_p50', 'DMI Seamless'))
             if 'icon_d2_p50' in accuracy_data.columns:
-                metrics_cols.append(('icon_d2_p50', 'ICON D2 p50'))
+                metrics_cols.append(('icon_d2_p50', 'ICON D2'))
+            if 'metno_seamless_p50' in accuracy_data.columns:
+                metrics_cols.append(('metno_seamless_p50', 'MetNo Seamless'))
+            if 'meteofrance_seamless_p50' in accuracy_data.columns:
+                metrics_cols.append(('meteofrance_seamless_p50', 'Meteofrance Seamless'))
             
             # Calculate and display metrics in a table
             metrics_data = []
@@ -1457,6 +1542,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 def main():
     st.sidebar.title("Navigation")
