@@ -1080,7 +1080,6 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-
 def solar_view():
     """Display solar generation data and forecasts from Elia with country-wide totals."""
     st.subheader("Solar View")
@@ -1161,27 +1160,18 @@ def solar_view():
                 if df.empty:
                     return None
                 
-                # Get forecast column - might be named differently depending on model
-                forecast_col = None
-                for col in df.columns:
-                    if col in [0.5, '0.5', 'forecast', 'prediction', 'mean']:
-                        forecast_col = col
-                        break
+                # Check for p50, p10, p90 columns
+                standard_cols = ['p50', 'p10', 'p90']
+                available_cols = [col for col in standard_cols if col in df.columns]
                 
-                if forecast_col is None and len(df.columns) > 0:
-                    # If no standard name found, use the first numeric column
-                    for col in df.columns:
-                        if pd.api.types.is_numeric_dtype(df[col]):
-                            forecast_col = col
-                            break
-                
-                if forecast_col is None:
+                if not available_cols:
+                    st.warning(f"No standard forecast columns found in {model_name} data")
                     return None
                 
-                # Prepare output DataFrame with renamed column
-                result = pd.DataFrame({
-                    f"{model_name}_forecast": df[forecast_col]
-                }, index=df.index)
+                # Prepare output DataFrame with renamed columns
+                result = pd.DataFrame()
+                for col in available_cols:
+                    result[f"{model_name}_{col}"] = df[col]
                 
                 # Ensure datetime index
                 if not isinstance(result.index, pd.DatetimeIndex):
@@ -1234,7 +1224,6 @@ def solar_view():
         # Filter data for the selected date
         filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_start) & 
                                 (solar_data['Datetime'] < selected_date_end)]
-        print(filtered_data)
         
         # Show data availability
         if filtered_data.empty:
@@ -1315,23 +1304,79 @@ def solar_view():
         )
         
         # Add model forecasts
-        if 'dmi_seamless_forecast' in plot_data.columns:
+        # DMI Seamless
+        if 'dmi_seamless_p50' in plot_data.columns:
+            # Add uncertainty band (p10-p90) if available
+            if 'dmi_seamless_p10' in plot_data.columns and 'dmi_seamless_p90' in plot_data.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['dmi_seamless_p90'],
+                        name='DMI p90',
+                        mode='lines',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=False
+                    )
+                )
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['dmi_seamless_p10'],
+                        name='DMI range [p10-p90]',
+                        mode='lines',
+                        fill='tonexty',
+                        fillcolor='rgba(0, 128, 0, 0.2)',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=True
+                    )
+                )
+            
+            # Add p50 forecast
             fig.add_trace(
                 go.Scatter(
                     x=plot_data['Datetime'],
-                    y=plot_data['dmi_seamless_forecast'],
-                    name='DMI Seamless Forecast',
+                    y=plot_data['dmi_seamless_p50'],
+                    name='DMI Seamless (p50)',
                     mode='lines',
                     line_color='green'
                 )
             )
             
-        if 'icon_d2_forecast' in plot_data.columns:
+        # ICON D2
+        if 'icon_d2_p50' in plot_data.columns:
+            # Add uncertainty band (p10-p90) if available
+            if 'icon_d2_p10' in plot_data.columns and 'icon_d2_p90' in plot_data.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['icon_d2_p90'],
+                        name='ICON p90',
+                        mode='lines',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=False
+                    )
+                )
+                
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data['icon_d2_p10'],
+                        name='ICON range [p10-p90]',
+                        mode='lines',
+                        fill='tonexty',
+                        fillcolor='rgba(128, 0, 128, 0.2)',
+                        line_color='rgba(0,0,0,0)',
+                        showlegend=True
+                    )
+                )
+            
+            # Add p50 forecast
             fig.add_trace(
                 go.Scatter(
                     x=plot_data['Datetime'],
-                    y=plot_data['icon_d2_forecast'],
-                    name='ICON D2 Forecast',
+                    y=plot_data['icon_d2_p50'],
+                    name='ICON D2 (p50)',
                     mode='lines',
                     line_color='purple'
                 )
@@ -1358,10 +1403,10 @@ def solar_view():
             metrics_cols = []
             if 'Day Ahead 11AM forecast' in accuracy_data.columns:
                 metrics_cols.append(('Day Ahead 11AM forecast', 'Elia Forecast'))
-            if 'dmi_seamless_forecast' in accuracy_data.columns:
-                metrics_cols.append(('dmi_seamless_forecast', 'DMI Seamless'))
-            if 'icon_d2_forecast' in accuracy_data.columns:
-                metrics_cols.append(('icon_d2_forecast', 'ICON D2'))
+            if 'dmi_seamless_p50' in accuracy_data.columns:
+                metrics_cols.append(('dmi_seamless_p50', 'DMI Seamless p50'))
+            if 'icon_d2_p50' in accuracy_data.columns:
+                metrics_cols.append(('icon_d2_p50', 'ICON D2 p50'))
             
             # Calculate and display metrics in a table
             metrics_data = []
@@ -1395,6 +1440,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 def main():
     st.sidebar.title("Navigation")
