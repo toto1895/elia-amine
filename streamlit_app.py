@@ -1089,6 +1089,12 @@ def solar_view():
         # Add a date selector
         selected_date = st.date_input("Select date", pd.to_datetime("today"))
         
+        if st.button("Clear Cache"):
+            st.cache_resource.clear()
+            st.cache_data.clear()
+            st.success("Cache cleared!")
+            time.sleep(1)
+        
         # Function to load solar data with caching
         @st.cache_data(ttl=3600)  # Cache for 1 hour
         def load_solar_data():
@@ -1104,8 +1110,118 @@ def solar_view():
                 st.error(f"Error loading solar data: {e}")
                 return pd.DataFrame()
         
-        # Load the data
+        # Function to load forecast models from Google Cloud Storage
+        @st.cache_data(ttl=3600, show_spinner=False)
+        def load_solar_forecast_model(model_name, selected_date):
+            try:
+                # Create Google Cloud Storage client
+                service_account_info = json.loads(GCLOUD)
+                credentials = service_account.Credentials.from_service_account_info(service_account_info)
+                storage_client = storage.Client(credentials=credentials)
+                bucket = storage_client.bucket('oracle_predictions')
+                
+                # List files for this model
+                prefix = f'predico-elia/forecasts_solar/{model_name}'
+                blobs = list(bucket.list_blobs(prefix=prefix))
+                
+                # Filter for parquet files
+                valid_files = [blob.name for blob in blobs if blob.name.endswith(".parquet")]
+                
+                if not valid_files:
+                    return None
+                
+                # Extract date info and find relevant file
+                date_file_pairs = []
+                for file in valid_files:
+                    try:
+                        filename = file.split('/')[-1]
+                        parts = filename.split('_')
+                        if len(parts) >= 3:
+                            year, month, day = int(parts[0]), int(parts[1]), int(parts[2].split('.')[0])
+                            file_date = pd.Timestamp(year=year, month=month, day=day)
+                            date_file_pairs.append((file_date, file))
+                    except Exception:
+                        continue
+                
+                if not date_file_pairs:
+                    return None
+                
+                # Sort and select best match
+                date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
+                best_match = date_file_pairs[0][1]
+                
+                # Download and load the file
+                blob = bucket.blob(best_match)
+                
+                with tempfile.NamedTemporaryFile(suffix='.parquet', delete=True) as temp_file:
+                    blob.download_to_filename(temp_file.name)
+                    df = pd.read_parquet(temp_file.name)
+                
+                # Process the DataFrame
+                if df.empty:
+                    return None
+                
+                # Get forecast column - might be named differently depending on model
+                forecast_col = None
+                for col in df.columns:
+                    if col in [0.5, '0.5', 'forecast', 'prediction', 'mean']:
+                        forecast_col = col
+                        break
+                
+                if forecast_col is None and len(df.columns) > 0:
+                    # If no standard name found, use the first numeric column
+                    for col in df.columns:
+                        if pd.api.types.is_numeric_dtype(df[col]):
+                            forecast_col = col
+                            break
+                
+                if forecast_col is None:
+                    return None
+                
+                # Prepare output DataFrame with renamed column
+                result = pd.DataFrame({
+                    f"{model_name}_forecast": df[forecast_col]
+                }, index=df.index)
+                
+                # Ensure datetime index
+                if not isinstance(result.index, pd.DatetimeIndex):
+                    if 'datetime' in df.columns:
+                        result.index = pd.to_datetime(df['datetime'])
+                    elif 'date' in df.columns:
+                        result.index = pd.to_datetime(df['date'])
+                    else:
+                        # Create synthetic index based on selected date
+                        result.index = pd.date_range(
+                            start=pd.Timestamp(selected_date),
+                            periods=len(result),
+                            freq='H'
+                        )
+                
+                return result
+                
+            except Exception as e:
+                st.warning(f"Error loading {model_name} model: {str(e)}")
+                return None
+        
+        # Load the Elia data
         solar_data = load_solar_data()
+        
+        # Load forecast models
+        progress_bar = st.progress(0)
+        progress_text = st.empty()
+        
+        models = ['dmi_seamless', 'icon_d2']
+        forecasts = {}
+        
+        for i, model in enumerate(models):
+            progress_text.text(f"Loading {model} forecast...")
+            result = load_solar_forecast_model(model, selected_date)
+            if result is not None:
+                forecasts[model] = result
+            progress_bar.progress((i + 1) / len(models))
+        
+        progress_bar.empty()
+        progress_text.empty()
         
         if solar_data.empty:
             st.error("No solar data available")
@@ -1154,14 +1270,32 @@ def solar_view():
         col2.metric("Peak Generation (MW)", f"{max_generation:.1f}")
         col3.metric("Capacity Factor (%)", f"{capacity_factor:.1f}")
         
+        # Combine forecast data with Elia data
+        plot_data = total_data.copy()
+        plot_data.set_index('Datetime', inplace=True)
+        
+        # Add model forecasts if available
+        for model_name, model_data in forecasts.items():
+            if model_data is not None:
+                # Resample model data to match Elia data frequency if needed
+                if model_data.index.freq != plot_data.index.freq:
+                    model_data = model_data.resample(plot_data.index.freq).interpolate()
+                
+                # Merge with plot data
+                model_data = model_data.reindex(plot_data.index, method='nearest')
+                plot_data = pd.concat([plot_data, model_data], axis=1)
+        
+        # Reset index for plotting
+        plot_data.reset_index(inplace=True)
+        
         # Plot the country-wide totals
         fig = go.Figure()
         
         # Add measured data
         fig.add_trace(
             go.Scatter(
-                x=total_data['Datetime'],
-                y=total_data['Measured & upscaled'],
+                x=plot_data['Datetime'],
+                y=plot_data['Measured & upscaled'],
                 name='Actual Generation',
                 mode='lines',
                 line_color='gold'
@@ -1171,13 +1305,36 @@ def solar_view():
         # Add day ahead forecast
         fig.add_trace(
             go.Scatter(
-                x=total_data['Datetime'],
-                y=total_data['Day Ahead 11AM forecast'],
-                name='Day Ahead Forecast',
+                x=plot_data['Datetime'],
+                y=plot_data['Day Ahead 11AM forecast'],
+                name='Day Ahead Forecast (Elia)',
                 mode='lines',
                 line_color='orange'
             )
         )
+        
+        # Add model forecasts
+        if 'dmi_seamless_forecast' in plot_data.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_data['Datetime'],
+                    y=plot_data['dmi_seamless_forecast'],
+                    name='DMI Seamless Forecast',
+                    mode='lines',
+                    line_color='green'
+                )
+            )
+            
+        if 'icon_d2_forecast' in plot_data.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=plot_data['Datetime'],
+                    y=plot_data['icon_d2_forecast'],
+                    name='ICON D2 Forecast',
+                    mode='lines',
+                    line_color='purple'
+                )
+            )
         
         # Update layout
         fig.update_layout(
@@ -1193,23 +1350,50 @@ def solar_view():
         st.subheader("Forecast Accuracy")
         
         # Filter for rows with both actual and forecast data
-        accuracy_data = total_data.dropna(subset=['Measured & upscaled', 'Day Ahead 11AM forecast'])
+        accuracy_data = plot_data.dropna(subset=['Measured & upscaled'])
         
         if not accuracy_data.empty:
-            # Calculate error metrics
-            rmse = calculate_rmse(accuracy_data['Measured & upscaled'], accuracy_data['Day Ahead 11AM forecast'])
-            mae = np.mean(np.abs(accuracy_data['Measured & upscaled'] - accuracy_data['Day Ahead 11AM forecast']))
+            # Prepare columns for metrics calculation
+            metrics_cols = []
+            if 'Day Ahead 11AM forecast' in accuracy_data.columns:
+                metrics_cols.append(('Day Ahead 11AM forecast', 'Elia Forecast'))
+            if 'dmi_seamless_forecast' in accuracy_data.columns:
+                metrics_cols.append(('dmi_seamless_forecast', 'DMI Seamless'))
+            if 'icon_d2_forecast' in accuracy_data.columns:
+                metrics_cols.append(('icon_d2_forecast', 'ICON D2'))
             
-            # Create error metrics row
-            col1, col2 = st.columns(2)
-            col1.metric("RMSE (MW)", f"{rmse:.2f}")
-            col2.metric("MAE (MW)", f"{mae:.2f}")
+            # Calculate and display metrics in a table
+            metrics_data = []
+            for col, name in metrics_cols:
+                if col in accuracy_data.columns:
+                    valid_data = accuracy_data.dropna(subset=[col])
+                    if not valid_data.empty:
+                        rmse = calculate_rmse(valid_data['Measured & upscaled'], valid_data[col])
+                        mae = np.mean(np.abs(valid_data['Measured & upscaled'] - valid_data[col]))
+                        metrics_data.append({
+                            'Model': name,
+                            'RMSE (MW)': round(rmse, 2),
+                            'MAE (MW)': round(mae, 2)
+                        })
+            
+            if metrics_data:
+                st.table(pd.DataFrame(metrics_data).set_index('Model'))
+            else:
+                st.warning("No forecast data available for accuracy calculation")
+                
+        # Add download button for the data
+        csv = plot_data.to_csv().encode('utf-8')
+        st.download_button(
+            label="Download Data as CSV",
+            data=csv,
+            file_name=f"solar_data_{selected_date}.csv",
+            mime="text/csv",
+        )
         
     except Exception as e:
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
