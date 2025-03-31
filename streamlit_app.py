@@ -1195,7 +1195,7 @@ def solar_view():
         
         # Load the Elia data
         solar_data = load_solar_data()
-        print(solar_data.columns)
+        print(solar_data.T)
         # Load forecast models
         progress_bar = st.progress(0)
         progress_text = st.empty()
