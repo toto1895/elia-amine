@@ -1195,7 +1195,7 @@ def solar_view():
         
         # Load the Elia data
         solar_data = load_solar_data()
-        
+        print(solar_data.columns)
         # Load forecast models
         progress_bar = st.progress(0)
         progress_text = st.empty()
@@ -1216,7 +1216,7 @@ def solar_view():
         if solar_data.empty:
             st.error("No solar data available")
             return
-            
+        
         # Convert selected date to datetime with UTC timezone
         selected_date_start = pd.Timestamp(selected_date).tz_localize('UTC')
         selected_date_end = selected_date_start + pd.Timedelta(days=1)
