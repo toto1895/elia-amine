@@ -1441,7 +1441,6 @@ def solar_view():
         import traceback
         st.error(traceback.format_exc())
 
-
 def main():
     st.sidebar.title("Navigation")
     
