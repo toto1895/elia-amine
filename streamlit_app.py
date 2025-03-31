@@ -1080,6 +1080,7 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
+
 def solar_view():
     """Display solar generation data and forecasts from Elia with country-wide totals."""
     st.subheader("Solar View")
@@ -1195,7 +1196,7 @@ def solar_view():
         
         # Load the Elia data
         solar_data = load_solar_data()
-        print(solar_data.T)
+        
         # Load forecast models
         progress_bar = st.progress(0)
         progress_text = st.empty()
@@ -1216,7 +1217,7 @@ def solar_view():
         if solar_data.empty:
             st.error("No solar data available")
             return
-        
+            
         # Convert selected date to datetime with UTC timezone
         selected_date_start = pd.Timestamp(selected_date).tz_localize('UTC')
         selected_date_end = selected_date_start + pd.Timedelta(days=1)
@@ -1239,6 +1240,7 @@ def solar_view():
                 return
         
         # Create country-wide totals by summing all regions
+        # Group by datetime and sum all numeric columns
         total_data = filtered_data.groupby('Datetime').agg({
             'Monitored capacity': 'sum',
             'Measured & upscaled': 'sum',
@@ -1250,7 +1252,10 @@ def solar_view():
         display_date = filtered_data['Datetime'].dt.date.iloc[0]
         st.subheader(f"Total Solar Generation for Belgium on {display_date}")
         
-        # Create metrics row
+        # Display a note about data aggregation
+        st.info(f"This view shows the total solar generation across all regions in Belgium. Data is aggregated by summing values across {len(filtered_data['Region'].unique())} regions.")
+        
+        # Create metrics row with proper formatting
         max_capacity = total_data['Monitored capacity'].max()
         max_generation = total_data['Measured & upscaled'].max()
         capacity_factor = (total_data['Measured & upscaled'].mean() / max_capacity * 100) if max_capacity > 0 else 0
@@ -1382,12 +1387,24 @@ def solar_view():
                 )
             )
         
-        # Update layout
+        # Update layout with dynamic y-axis range for better visualization
+        max_y_value = max([
+            plot_data['Measured & upscaled'].max() if 'Measured & upscaled' in plot_data else 0,
+            plot_data['Day Ahead 11AM forecast'].max() if 'Day Ahead 11AM forecast' in plot_data else 0,
+            plot_data['dmi_seamless_p90'].max() if 'dmi_seamless_p90' in plot_data else 0,
+            plot_data['icon_d2_p90'].max() if 'icon_d2_p90' in plot_data else 0
+        ])
+        
+        # Add a bit of margin (10%) to the max value for better visualization
+        y_max = max_y_value * 1.1
+        
         fig.update_layout(
             xaxis_title="Time",
             yaxis_title="MW",
+            yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
-            height=500
+            height=500,
+            title=f"Solar Generation in Belgium - Total of {max_capacity:.1f} MW Capacity"
         )
         
         st.plotly_chart(fig, use_container_width=True)
