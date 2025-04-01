@@ -1282,7 +1282,7 @@ def solar_view():
         
         # Reset index for plotting
         plot_data.reset_index(inplace=True)
-        
+        plot_data=plot_data.replace(0.0,np.nan)
         # Plot the country-wide totals
         fig = go.Figure()
         
