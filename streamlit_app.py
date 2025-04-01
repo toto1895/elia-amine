@@ -1080,9 +1080,9 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-
 def solar_view():
     """Display solar generation data and forecasts using the latest solar forecast for a selected date."""
+    import datetime
     st.subheader("Solar View")
 
     try:
@@ -1136,7 +1136,9 @@ def solar_view():
                     return None
                 
                 # Find files for the selected date
-                selected_date_files = [f for d, f in date_file_pairs if d.date() == selected_date.date()]
+                # Convert both to date objects to ensure proper comparison
+                selected_date_obj = selected_date if isinstance(selected_date, datetime.date) and not isinstance(selected_date, datetime.datetime) else pd.Timestamp(selected_date).date()
+                selected_date_files = [f for d, f in date_file_pairs if d.date() == selected_date_obj]
                 
                 # If we have files for the selected date, use the latest one
                 if selected_date_files:
@@ -1393,6 +1395,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 def main():
     st.sidebar.title("Navigation")
