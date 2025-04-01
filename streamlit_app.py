@@ -1148,7 +1148,7 @@ def solar_view():
                 
                 # Sort and select best match
                 date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
-                best_match = date_file_pairs[0][1]
+                best_match = date_file_pairs[1][1]
                 
                 # Download and load the file
                 blob = bucket.blob(best_match)
