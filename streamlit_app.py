@@ -1082,7 +1082,7 @@ def run_forecast_job():
 
 
 def solar_view():
-    """Display solar generation data and forecasts from Elia with country-wide totals."""
+    """Display solar generation data and forecasts using the latest solar forecast for a selected date."""
     st.subheader("Solar View")
 
     try:
@@ -1098,21 +1098,6 @@ def solar_view():
         # Convert selected date to datetime with UTC timezone for consistent comparison
         selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')
         selected_date_end = selected_date_utc + pd.Timedelta(days=1)
-        
-        # Function to load solar data with caching
-        @st.cache_data(ttl=3600)  # Cache for 1 hour
-        def load_solar_data():
-            try:
-                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
-                                     sep=';')
-                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
-                                   'Measured & upscaled','Day Ahead 11AM forecast',
-                                   'Most recent forecast']].replace(0.0,np.nan)
-                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
-                return latest_pv
-            except Exception as e:
-                st.error(f"Error loading solar data: {e}")
-                return pd.DataFrame()
         
         # Function to load forecast models from Google Cloud Storage
         @st.cache_data(ttl=3600, show_spinner=False)
@@ -1150,9 +1135,16 @@ def solar_view():
                 if not date_file_pairs:
                     return None
                 
-                # Sort and find the file with the date closest to selected_date
-                date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
-                best_match = date_file_pairs[0][1]  # Changed from [1] to [0] to get closest match
+                # Find files for the selected date
+                selected_date_files = [f for d, f in date_file_pairs if d.date() == selected_date.date()]
+                
+                # If we have files for the selected date, use the latest one
+                if selected_date_files:
+                    best_match = selected_date_files[-1]  # Use the last file (assuming it's the latest)
+                else:
+                    # If no files for the selected date, find the closest date
+                    date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
+                    best_match = date_file_pairs[0][1]
                 
                 # Download and load the file
                 blob = bucket.blob(best_match)
@@ -1195,7 +1187,7 @@ def solar_view():
                     else:
                         # Create synthetic index based on selected date
                         result.index = pd.date_range(
-                            start=selected_date_utc,  # Use consistent date reference
+                            start=selected_date_utc,
                             periods=len(result),
                             freq='H'
                         )
@@ -1211,6 +1203,21 @@ def solar_view():
             except Exception as e:
                 st.warning(f"Error loading {model_name} model: {str(e)}")
                 return None
+        
+        # Function to load solar data with caching
+        @st.cache_data(ttl=3600)  # Cache for 1 hour
+        def load_solar_data():
+            try:
+                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
+                                     sep=';')
+                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
+                                   'Measured & upscaled','Day Ahead 11AM forecast',
+                                   'Most recent forecast']].replace(0.0,np.nan)
+                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
+                return latest_pv
+            except Exception as e:
+                st.error(f"Error loading solar data: {e}")
+                return pd.DataFrame()
         
         # Load the Elia data
         solar_data = load_solar_data()
@@ -1246,55 +1253,15 @@ def solar_view():
         # Show data availability
         if filtered_data.empty:
             st.warning(f"No Elia data available for {selected_date}")
-            # Show the most recent date with data
-            unique_dates = solar_data['Datetime'].dt.date.unique()
-            if len(unique_dates) > 0:
-                most_recent = pd.Timestamp(max(unique_dates)).tz_localize('UTC')
-                filtered_data = solar_data[(solar_data['Datetime'] >= most_recent) & 
-                                         (solar_data['Datetime'] < most_recent + pd.Timedelta(days=1))]
-                st.info(f"Showing most recent Elia data available: {most_recent.date()}")
-                
-                # Update the selected date variables to match this new date
-                selected_date_utc = most_recent
-                selected_date_end = selected_date_utc + pd.Timedelta(days=1)
-                
-                # Reload forecast models for the new date if needed
-                for i, model in enumerate(models):
-                    if model not in forecasts or forecasts[model] is None or forecasts[model].empty:
-                        result = load_solar_forecast_model(model, most_recent.date())
-                        if result is not None:
-                            # Filter to match the new date range
-                            result = result[(result.index >= selected_date_utc) & 
-                                          (result.index < selected_date_end)]
-                            forecasts[model] = result
-            else:
-                return
+            return
         
         # Create country-wide totals by summing all regions
-        # Group by datetime and sum all numeric columns
         total_data = filtered_data.loc[filtered_data.Region=='Belgium',:].groupby('Datetime').agg({
             'Monitored capacity': 'sum',
             'Measured & upscaled': 'sum',
             'Day Ahead 11AM forecast': 'sum',
             'Most recent forecast': 'sum'
         }).reset_index()
-        
-        # Display summary statistics for the entire country
-        display_date = filtered_data['Datetime'].dt.date.iloc[0]
-        st.subheader(f"Total Solar Generation for Belgium on {display_date}")
-        
-        # Display a note about data aggregation
-        st.info(f"This view shows the total solar generation across all regions in Belgium. Data is aggregated by summing values across {len(filtered_data['Region'].unique())} regions.")
-        
-        # Create metrics row with proper formatting
-        max_capacity = total_data['Monitored capacity'].max()
-        max_generation = total_data['Measured & upscaled'].max()
-        capacity_factor = (total_data['Measured & upscaled'].mean() / max_capacity * 100) if max_capacity > 0 else 0
-        
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Capacity (MW)", f"{max_capacity:.1f}")
-        col2.metric("Peak Generation (MW)", f"{max_generation:.1f}")
-        col3.metric("Capacity Factor (%)", f"{capacity_factor:.1f}")
         
         # Combine forecast data with Elia data
         plot_data = total_data.copy()
@@ -1345,167 +1312,60 @@ def solar_view():
             )
         )
         
-        # Add model forecasts
-        # DMI Seamless
-        if 'dmi_seamless_p50' in plot_data.columns:
-            # Add uncertainty band (p10-p90) if available
-            if 'dmi_seamless_p10' in plot_data.columns and 'dmi_seamless_p90' in plot_data.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['dmi_seamless_p90'],
-                        name='DMI p90',
-                        mode='lines',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=False
-                    )
-                )
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['dmi_seamless_p10'],
-                        name='DMI range [p10-p90]',
-                        mode='lines',
-                        fill='tonexty',
-                        fillcolor='rgba(0, 128, 0, 0.2)',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=True
-                    )
-                )
-            
-            # Add p50 forecast
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_data['Datetime'],
-                    y=plot_data['dmi_seamless_p50'],
-                    name='DMI Seamless (p50)',
-                    mode='lines',
-                    line_color='green'
-                )
-            )
-            
-        # ICON D2
-        if 'icon_d2_p50' in plot_data.columns:
-            # Add uncertainty band (p10-p90) if available
-            if 'icon_d2_p10' in plot_data.columns and 'icon_d2_p90' in plot_data.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['icon_d2_p90'],
-                        name='ICON p90',
-                        mode='lines',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=False
-                    )
-                )
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['icon_d2_p10'],
-                        name='ICON range [p10-p90]',
-                        mode='lines',
-                        fill='tonexty',
-                        fillcolor='rgba(128, 0, 128, 0.2)',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=True
-                    )
-                )
-            
-            # Add p50 forecast
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_data['Datetime'],
-                    y=plot_data['icon_d2_p50'],
-                    name='ICON D2 (p50)',
-                    mode='lines',
-                    line_color='purple'
-                )
-            )
-            
-        # MetNo Seamless
-        if 'metno_seamless_p50' in plot_data.columns:
-            # Add uncertainty band (p10-p90) if available
-            if 'metno_seamless_p10' in plot_data.columns and 'metno_seamless_p90' in plot_data.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['metno_seamless_p90'],
-                        name='MetNo p90',
-                        mode='lines',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=False
-                    )
-                )
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['metno_seamless_p10'],
-                        name='MetNo range [p10-p90]',
-                        mode='lines',
-                        fill='tonexty',
-                        fillcolor='rgba(255, 0, 0, 0.2)',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=True
-                    )
-                )
-            
-            # Add p50 forecast
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_data['Datetime'],
-                    y=plot_data['metno_seamless_p50'],
-                    name='MetNo Seamless (p50)',
-                    mode='lines',
-                    line_color='red'
-                )
-            )
-            
-        # Meteofrance Seamless
-        if 'meteofrance_seamless_p50' in plot_data.columns:
-            # Add uncertainty band (p10-p90) if available
-            if 'meteofrance_seamless_p10' in plot_data.columns and 'meteofrance_seamless_p90' in plot_data.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['meteofrance_seamless_p90'],
-                        name='Meteofrance p90',
-                        mode='lines',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=False
-                    )
-                )
-                
-                fig.add_trace(
-                    go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data['meteofrance_seamless_p10'],
-                        name='Meteofrance range [p10-p90]',
-                        mode='lines',
-                        fill='tonexty',
-                        fillcolor='rgba(0, 0, 255, 0.2)',
-                        line_color='rgba(0,0,0,0)',
-                        showlegend=True
-                    )
-                )
-            
-            # Add p50 forecast
-            fig.add_trace(
-                go.Scatter(
-                    x=plot_data['Datetime'],
-                    y=plot_data['meteofrance_seamless_p50'],
-                    name='Meteofrance Seamless (p50)',
-                    mode='lines',
-                    line_color='blue'
-                )
-            )
+        # Add model forecasts with a standard format
+        model_colors = {
+            'dmi_seamless': 'green',
+            'icon_d2': 'purple',
+            'metno_seamless': 'red',
+            'meteofrance_seamless': 'blue'
+        }
         
-        # Update layout with dynamic y-axis range for better visualization
+        for model_name, color in model_colors.items():
+            p50_col = f'{model_name}_p50'
+            p10_col = f'{model_name}_p10'
+            p90_col = f'{model_name}_p90'
+            
+            if p50_col in plot_data.columns:
+                # Add uncertainty band (p10-p90) if available
+                if p10_col in plot_data.columns and p90_col in plot_data.columns:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=plot_data['Datetime'],
+                            y=plot_data[p90_col],
+                            name=f'{model_name} p90',
+                            mode='lines',
+                            line_color='rgba(0,0,0,0)',
+                            showlegend=False
+                        )
+                    )
+                    
+                    fig.add_trace(
+                        go.Scatter(
+                            x=plot_data['Datetime'],
+                            y=plot_data[p10_col],
+                            name=f'{model_name} range [p10-p90]',
+                            mode='lines',
+                            fill='tonexty',
+                            fillcolor=f'rgba({",".join(map(str, [int(c) for c in color.lstrip("rgb(").rstrip(")").split(",")]))}, 0.2)' 
+                                if color.startswith('rgb') else f'rgba({",".join(["0", "0", "0"])}, 0.2)',
+                            line_color='rgba(0,0,0,0)',
+                            showlegend=True
+                        )
+                    )
+                
+                # Add p50 forecast
+                fig.add_trace(
+                    go.Scatter(
+                        x=plot_data['Datetime'],
+                        y=plot_data[p50_col],
+                        name=f'{model_name} (p50)',
+                        mode='lines',
+                        line_color=color
+                    )
+                )
+        
+        # Update layout with dynamic y-axis range
         max_y_value = plot_data.select_dtypes(include=[np.number]).max().max()
-        
-        # Add a bit of margin (10%) to the max value for better visualization
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
         
         fig.update_layout(
@@ -1514,51 +1374,12 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=500,
-            title=f"Solar Generation in Belgium - Total of {max_capacity:.1f} MW Capacity",
+            title=f"Solar Generation in Belgium - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Calculate forecast accuracy
-        st.subheader("Forecast Accuracy")
-        
-        # Filter for rows with both actual and forecast data
-        accuracy_data = plot_data.dropna(subset=['Measured & upscaled'])
-        
-        if not accuracy_data.empty:
-            # Prepare columns for metrics calculation
-            metrics_cols = []
-            if 'Day Ahead 11AM forecast' in accuracy_data.columns:
-                metrics_cols.append(('Day Ahead 11AM forecast', 'Elia Forecast'))
-            if 'dmi_seamless_p50' in accuracy_data.columns:
-                metrics_cols.append(('dmi_seamless_p50', 'DMI Seamless'))
-            if 'icon_d2_p50' in accuracy_data.columns:
-                metrics_cols.append(('icon_d2_p50', 'ICON D2'))
-            if 'metno_seamless_p50' in accuracy_data.columns:
-                metrics_cols.append(('metno_seamless_p50', 'MetNo Seamless'))
-            if 'meteofrance_seamless_p50' in accuracy_data.columns:
-                metrics_cols.append(('meteofrance_seamless_p50', 'Meteofrance Seamless'))
-            
-            # Calculate and display metrics in a table
-            metrics_data = []
-            for col, name in metrics_cols:
-                if col in accuracy_data.columns:
-                    valid_data = accuracy_data.dropna(subset=[col])
-                    if not valid_data.empty:
-                        rmse = calculate_rmse(valid_data['Measured & upscaled'], valid_data[col])
-                        mae = np.mean(np.abs(valid_data['Measured & upscaled'] - valid_data[col]))
-                        metrics_data.append({
-                            'Model': name,
-                            'RMSE (MW)': round(rmse, 2),
-                            'MAE (MW)': round(mae, 2)
-                        })
-            
-            if metrics_data:
-                st.table(pd.DataFrame(metrics_data).set_index('Model'))
-            else:
-                st.warning("No forecast data available for accuracy calculation")
-                
         # Add download button for the data
         csv = plot_data.to_csv().encode('utf-8')
         st.download_button(
@@ -1572,7 +1393,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
