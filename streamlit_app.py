@@ -1156,7 +1156,7 @@ def solar_view():
                 with tempfile.NamedTemporaryFile(suffix='.parquet', delete=True) as temp_file:
                     blob.download_to_filename(temp_file.name)
                     df = pd.read_parquet(temp_file.name)
-                
+                print(df)
                 # Process the DataFrame
                 if df.empty:
                     return None
@@ -1196,6 +1196,7 @@ def solar_view():
         
         # Load the Elia data
         solar_data = load_solar_data()
+        
         
         # Load forecast models
         progress_bar = st.progress(0)
