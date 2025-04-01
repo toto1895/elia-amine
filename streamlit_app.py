@@ -1095,6 +1095,10 @@ def solar_view():
             st.success("Cache cleared!")
             time.sleep(1)
         
+        # Convert selected date to datetime with UTC timezone for consistent comparison
+        selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')
+        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
+        
         # Function to load solar data with caching
         @st.cache_data(ttl=3600)  # Cache for 1 hour
         def load_solar_data():
@@ -1146,9 +1150,9 @@ def solar_view():
                 if not date_file_pairs:
                     return None
                 
-                # Sort and select best match
+                # Sort and find the file with the date closest to selected_date
                 date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
-                best_match = date_file_pairs[1][1]
+                best_match = date_file_pairs[0][1]  # Changed from [1] to [0] to get closest match
                 
                 # Download and load the file
                 blob = bucket.blob(best_match)
@@ -1156,12 +1160,20 @@ def solar_view():
                 with tempfile.NamedTemporaryFile(suffix='.parquet', delete=True) as temp_file:
                     blob.download_to_filename(temp_file.name)
                     df = pd.read_parquet(temp_file.name)
-                print(df)
+                
                 # Process the DataFrame
                 if df.empty:
                     return None
                 
-                # Check for p50, p10, p90 columns
+                # Check for p50, p10, p90 columns (or convert equivalents)
+                if all(col in df.columns for col in [0.1, 0.5, 0.9]):
+                    # Rename columns to match expected format
+                    df = df.rename(columns={0.1: 'p10', 0.5: 'p50', 0.9: 'p90'})
+                elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
+                    # Rename string columns
+                    df = df.rename(columns={'0.1': 'p10', '0.5': 'p50', '0.9': 'p90'})
+                
+                # Check if we now have standard columns
                 standard_cols = ['p50', 'p10', 'p90']
                 available_cols = [col for col in standard_cols if col in df.columns]
                 
@@ -1183,10 +1195,16 @@ def solar_view():
                     else:
                         # Create synthetic index based on selected date
                         result.index = pd.date_range(
-                            start=pd.Timestamp(selected_date),
+                            start=selected_date_utc,  # Use consistent date reference
                             periods=len(result),
                             freq='H'
                         )
+                
+                # Make sure index is timezone-aware in UTC for consistent comparison
+                if result.index.tz is None:
+                    result.index = result.index.tz_localize('UTC')
+                elif result.index.tz.zone != 'UTC':
+                    result.index = result.index.tz_convert('UTC')
                 
                 return result
                 
@@ -1196,7 +1214,6 @@ def solar_view():
         
         # Load the Elia data
         solar_data = load_solar_data()
-        
         
         # Load forecast models
         progress_bar = st.progress(0)
@@ -1209,6 +1226,9 @@ def solar_view():
             progress_text.text(f"Loading {model} forecast...")
             result = load_solar_forecast_model(model, selected_date)
             if result is not None:
+                # Filter model data to match the selected date range
+                result = result[(result.index >= selected_date_utc) & 
+                               (result.index < selected_date_end)]
                 forecasts[model] = result
             progress_bar.progress((i + 1) / len(models))
         
@@ -1219,24 +1239,34 @@ def solar_view():
             st.error("No solar data available")
             return
             
-        # Convert selected date to datetime with UTC timezone
-        selected_date_start = pd.Timestamp(selected_date).tz_localize('UTC')
-        selected_date_end = selected_date_start + pd.Timedelta(days=1)
-        
-        # Filter data for the selected date
-        filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_start) & 
+        # Filter Elia data for the selected date
+        filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_utc) & 
                                 (solar_data['Datetime'] < selected_date_end)]
         
         # Show data availability
         if filtered_data.empty:
-            st.warning(f"No data available for {selected_date}")
+            st.warning(f"No Elia data available for {selected_date}")
             # Show the most recent date with data
             unique_dates = solar_data['Datetime'].dt.date.unique()
             if len(unique_dates) > 0:
                 most_recent = pd.Timestamp(max(unique_dates)).tz_localize('UTC')
                 filtered_data = solar_data[(solar_data['Datetime'] >= most_recent) & 
                                          (solar_data['Datetime'] < most_recent + pd.Timedelta(days=1))]
-                st.info(f"Showing most recent data available: {most_recent.date()}")
+                st.info(f"Showing most recent Elia data available: {most_recent.date()}")
+                
+                # Update the selected date variables to match this new date
+                selected_date_utc = most_recent
+                selected_date_end = selected_date_utc + pd.Timedelta(days=1)
+                
+                # Reload forecast models for the new date if needed
+                for i, model in enumerate(models):
+                    if model not in forecasts or forecasts[model] is None or forecasts[model].empty:
+                        result = load_solar_forecast_model(model, most_recent.date())
+                        if result is not None:
+                            # Filter to match the new date range
+                            result = result[(result.index >= selected_date_utc) & 
+                                          (result.index < selected_date_end)]
+                            forecasts[model] = result
             else:
                 return
         
@@ -1272,18 +1302,24 @@ def solar_view():
         
         # Add model forecasts if available
         for model_name, model_data in forecasts.items():
-            if model_data is not None:
-                # Resample model data to match Elia data frequency if needed
-                if model_data.index.freq != plot_data.index.freq:
-                    model_data = model_data.resample(plot_data.index.freq).interpolate()
+            if model_data is not None and not model_data.empty:
+                # Make sure the model data is properly filtered to the selected date range
+                model_data = model_data[(model_data.index >= selected_date_utc) & 
+                                      (model_data.index < selected_date_end)]
                 
-                # Merge with plot data
+                # Resample model data to match Elia data frequency if needed
+                target_freq = pd.infer_freq(plot_data.index)
+                if target_freq and (pd.infer_freq(model_data.index) != target_freq):
+                    model_data = model_data.resample(target_freq).interpolate()
+                
+                # Merge with plot data using the index
                 model_data = model_data.reindex(plot_data.index, method='nearest')
                 plot_data = pd.concat([plot_data, model_data], axis=1)
         
         # Reset index for plotting
         plot_data.reset_index(inplace=True)
-        plot_data=plot_data.replace(0.0,np.nan)
+        plot_data = plot_data.replace(0.0, np.nan)
+        
         # Plot the country-wide totals
         fig = go.Figure()
         
@@ -1467,17 +1503,10 @@ def solar_view():
             )
         
         # Update layout with dynamic y-axis range for better visualization
-        max_y_value = max([
-            plot_data['Measured & upscaled'].max() if 'Measured & upscaled' in plot_data else 0,
-            plot_data['Day Ahead 11AM forecast'].max() if 'Day Ahead 11AM forecast' in plot_data else 0,
-            plot_data['dmi_seamless_p90'].max() if 'dmi_seamless_p90' in plot_data else 0,
-            plot_data['icon_d2_p90'].max() if 'icon_d2_p90' in plot_data else 0,
-            plot_data['metno_seamless_p90'].max() if 'metno_seamless_p90' in plot_data else 0,
-            plot_data['meteofrance_seamless_p90'].max() if 'meteofrance_seamless_p90' in plot_data else 0
-        ])
+        max_y_value = plot_data.select_dtypes(include=[np.number]).max().max()
         
         # Add a bit of margin (10%) to the max value for better visualization
-        y_max = max_y_value * 1.1
+        y_max = max_y_value * 1.1 if max_y_value > 0 else 100
         
         fig.update_layout(
             xaxis_title="Time",
