@@ -1081,8 +1081,9 @@ def run_forecast_job():
         st.error(traceback.format_exc())
 
 def solar_view():
-    """Display solar generation data and forecasts using the latest solar forecast for a selected date."""
+    """Display solar forecasts from various models for a selected date."""
     import datetime
+    
     st.subheader("Solar View")
 
     try:
@@ -1136,7 +1137,6 @@ def solar_view():
                     return None
                 
                 # Find files for the selected date
-                # Convert both to date objects to ensure proper comparison
                 selected_date_obj = selected_date if isinstance(selected_date, datetime.date) and not isinstance(selected_date, datetime.datetime) else pd.Timestamp(selected_date).date()
                 selected_date_files = [f for d, f in date_file_pairs if d.date() == selected_date_obj]
                 
@@ -1206,24 +1206,6 @@ def solar_view():
                 st.warning(f"Error loading {model_name} model: {str(e)}")
                 return None
         
-        # Function to load solar data with caching
-        @st.cache_data(ttl=3600)  # Cache for 1 hour
-        def load_solar_data():
-            try:
-                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
-                                     sep=';')
-                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
-                                   'Measured & upscaled','Day Ahead 11AM forecast',
-                                   'Most recent forecast']].replace(0.0,np.nan)
-                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
-                return latest_pv
-            except Exception as e:
-                st.error(f"Error loading solar data: {e}")
-                return pd.DataFrame()
-        
-        # Load the Elia data
-        solar_data = load_solar_data()
-        
         # Load forecast models
         progress_bar = st.progress(0)
         progress_text = st.empty()
@@ -1244,75 +1226,28 @@ def solar_view():
         progress_bar.empty()
         progress_text.empty()
         
-        if solar_data.empty:
-            st.error("No solar data available")
-            return
-            
-        # Filter Elia data for the selected date
-        filtered_data = solar_data[(solar_data['Datetime'] >= selected_date_utc) & 
-                                (solar_data['Datetime'] < selected_date_end)]
-        
-        # Show data availability
-        if filtered_data.empty:
-            st.warning(f"No Elia data available for {selected_date}")
+        if not forecasts:
+            st.error("No forecast data available for the selected date")
             return
         
-        # Create country-wide totals by summing all regions
-        total_data = filtered_data.loc[filtered_data.Region=='Belgium',:].groupby('Datetime').agg({
-            'Monitored capacity': 'sum',
-            'Measured & upscaled': 'sum',
-            'Day Ahead 11AM forecast': 'sum',
-            'Most recent forecast': 'sum'
-        }).reset_index()
+        # Combine forecasts into one DataFrame
+        combined_data = pd.concat(list(forecasts.values()), axis=1)
+        combined_data.index = pd.to_datetime(combined_data.index)
         
-        # Combine forecast data with Elia data
-        plot_data = total_data.copy()
-        plot_data.set_index('Datetime', inplace=True)
+        # Create a time index with hourly intervals for the selected date
+        time_index = pd.date_range(
+            start=selected_date_utc,
+            end=selected_date_end - pd.Timedelta(minutes=1),
+            freq='H'
+        )
         
-        # Add model forecasts if available
-        for model_name, model_data in forecasts.items():
-            if model_data is not None and not model_data.empty:
-                # Make sure the model data is properly filtered to the selected date range
-                model_data = model_data[(model_data.index >= selected_date_utc) & 
-                                      (model_data.index < selected_date_end)]
-                
-                # Resample model data to match Elia data frequency if needed
-                target_freq = pd.infer_freq(plot_data.index)
-                if target_freq and (pd.infer_freq(model_data.index) != target_freq):
-                    model_data = model_data.resample(target_freq).interpolate()
-                
-                # Merge with plot data using the index
-                model_data = model_data.reindex(plot_data.index, method='nearest')
-                plot_data = pd.concat([plot_data, model_data], axis=1)
-        
-        # Reset index for plotting
-        plot_data.reset_index(inplace=True)
+        # Reindex data to ensure consistent time points
+        plot_data = combined_data.reindex(time_index, method='nearest')
+        plot_data = plot_data.reset_index().rename(columns={'index': 'Datetime'})
         plot_data = plot_data.replace(0.0, np.nan)
         
-        # Plot the country-wide totals
+        # Plot the forecasts
         fig = go.Figure()
-        
-        # Add measured data
-        fig.add_trace(
-            go.Scatter(
-                x=plot_data['Datetime'],
-                y=plot_data['Measured & upscaled'],
-                name='Actual Generation',
-                mode='lines',
-                line_color='gold'
-            )
-        )
-        
-        # Add day ahead forecast
-        fig.add_trace(
-            go.Scatter(
-                x=plot_data['Datetime'],
-                y=plot_data['Day Ahead 11AM forecast'],
-                name='Day Ahead Forecast (Elia)',
-                mode='lines',
-                line_color='orange'
-            )
-        )
         
         # Add model forecasts with a standard format
         model_colors = {
@@ -1348,8 +1283,8 @@ def solar_view():
                             name=f'{model_name} range [p10-p90]',
                             mode='lines',
                             fill='tonexty',
-                            fillcolor=f'rgba({",".join(map(str, [int(c) for c in color.lstrip("rgb(").rstrip(")").split(",")]))}, 0.2)' 
-                                if color.startswith('rgb') else f'rgba({",".join(["0", "0", "0"])}, 0.2)',
+                            fillcolor=f'rgba({color.replace("rgb","").replace("(","").replace(")","")}, 0.2)' 
+                                if color.startswith('rgb') else f'rgba({color=="green" and "0,128,0" or color=="purple" and "128,0,128" or color=="red" and "255,0,0" or color=="blue" and "0,0,255" or "0,0,0"}, 0.2)',
                             line_color='rgba(0,0,0,0)',
                             showlegend=True
                         )
@@ -1376,7 +1311,7 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=500,
-            title=f"Solar Generation in Belgium - {selected_date}",
+            title=f"Solar Forecasts - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
@@ -1387,7 +1322,7 @@ def solar_view():
         st.download_button(
             label="Download Data as CSV",
             data=csv,
-            file_name=f"solar_data_{selected_date}.csv",
+            file_name=f"solar_forecasts_{selected_date}.csv",
             mime="text/csv",
         )
         
@@ -1395,7 +1330,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
