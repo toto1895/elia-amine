@@ -1103,7 +1103,7 @@ def solar_view():
                                      sep=';')
                 latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
                                    'Measured & upscaled','Day Ahead 11AM forecast',
-                                   'Most recent forecast']]
+                                   'Most recent forecast']].replace(0.0,np.nan)
                 latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
                 return latest_pv
             except Exception as e:
