@@ -1081,9 +1081,10 @@ def run_forecast_job():
         st.error(traceback.format_exc())
 
 def solar_view():
-    """Display solar forecasts grouped by region with optimized groupby operations."""
+    """Display solar forecasts grouped by region with optimized groupby operations and forecast scoring."""
     import datetime
     import requests
+    import numpy as np
     
     st.subheader("Solar View")
 
@@ -1099,7 +1100,7 @@ def solar_view():
         
         # Convert selected date to datetime with UTC timezone for consistent comparison
         selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC') + pd.Timedelta(days=1)
-        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
+        selected_date_end = selected_date_utc + pd.Timedelta(days=2)
         
         # Function to load and process solar forecast data
         @st.cache_data(ttl=3600, show_spinner=False)
@@ -1197,6 +1198,64 @@ def solar_view():
                 import traceback
                 st.error(traceback.format_exc())
                 return None
+
+        # Function to calculate forecast scoring metrics
+        def calculate_forecast_scores(df, actual_column='Measured & upscaled'):
+            """
+            Calculate forecast accuracy metrics for different forecast columns against actual measurements.
+            
+            Parameters:
+            df (pd.DataFrame): DataFrame containing forecast and actual data
+            actual_column (str): Column name containing actual measured values
+            
+            Returns:
+            pd.DataFrame: DataFrame with scoring metrics for each forecast
+            """
+            if actual_column not in df.columns or df[actual_column].isna().all():
+                st.warning(f"No actual measurement data ({actual_column}) available for scoring")
+                return None
+                
+            # Filter to only rows where we have actual measurements
+            score_df = df.dropna(subset=[actual_column]).copy()
+            
+            if score_df.empty:
+                st.warning("No overlapping data points between forecasts and measurements")
+                return None
+                
+            # Identify all forecast columns (excluding uncertainty bounds)
+            forecast_columns = [col for col in score_df.columns 
+                               if col not in [actual_column, 'rec_0.2', 'rec_0.8'] 
+                               and not col.startswith('Region') 
+                               and not col.startswith('Model')
+                               and not col.startswith('Datetime')]
+            
+            # Create a DataFrame to store results
+            results = []
+            
+            for forecast in forecast_columns:
+                # Calculate metrics
+                mae = np.mean(np.abs(score_df[actual_column] - score_df[forecast]))
+                rmse = np.sqrt(np.mean(np.square(score_df[actual_column] - score_df[forecast])))
+                mape = np.mean(np.abs((score_df[actual_column] - score_df[forecast]) / score_df[actual_column])) * 100
+                bias = np.mean(score_df[forecast] - score_df[actual_column])
+                
+                # Calculate R-squared
+                corr = np.corrcoef(score_df[actual_column], score_df[forecast])[0, 1]
+                r_squared = corr ** 2
+                
+                results.append({
+                    'Forecast': forecast,
+                    'MAE (MW)': mae,
+                    'RMSE (MW)': rmse,
+                    'MAPE (%)': mape,
+                    'Bias (MW)': bias,
+                    'R-squared': r_squared,
+                    'Data Points': len(score_df)
+                })
+            
+            # Convert to DataFrame and sort by RMSE
+            results_df = pd.DataFrame(results).sort_values('RMSE (MW)')
+            return results_df
         
         # Model selection
         available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless']
@@ -1262,6 +1321,7 @@ def solar_view():
             'rec_0.8': 'sum'
         }).reset_index().set_index('Datetime')
         total_df = total_df.resample('15min').interpolate().iloc[:96]
+        
         # Fetch actual measured data from Elia
         with st.spinner("Fetching actual measured PV data from Elia..."):
             try:
@@ -1317,6 +1377,8 @@ def solar_view():
             'rec_0.2': 'green',
             'rec_0.8': 'green',
             'Measured & upscaled': 'white',
+            'Most recent forecast': 'yellow',
+            'Week ahead forecast': 'purple'
         }
         
         # Add traces for total forecast with uncertainty bands
@@ -1381,6 +1443,28 @@ def solar_view():
             )
         
         # Add most recent forecast if available
+        if 'Most recent forecast' in total_df.columns and not total_df['Most recent forecast'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Most recent forecast'],
+                    name=f"ELIA Most Recent Forecast",
+                    mode='lines',
+                    line_color=metric_colors['Most recent forecast']
+                )
+            )
+            
+        # Add week ahead forecast if available
+        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Week ahead forecast'],
+                    name=f"ELIA Week Ahead Forecast",
+                    mode='lines',
+                    line_color=metric_colors['Week ahead forecast']
+                )
+            )
         
         # Update layout with dynamic y-axis range
         max_y_value = total_df.max().max()
@@ -1397,6 +1481,103 @@ def solar_view():
         )
         
         st.plotly_chart(fig, use_container_width=True)
+        
+        # Calculate and display forecast scoring if actual measurements are available
+        if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
+            st.subheader("Forecast Scoring")
+            
+            with st.spinner("Calculating forecast scores..."):
+                scores_df = calculate_forecast_scores(total_df)
+                
+                if scores_df is not None:
+                    # Create a styled dataframe for better visualization
+                    def highlight_min(s):
+                        """Highlight the minimum in a Series green."""
+                        is_min = s == s.min()
+                        return ['background-color: #006400' if v else '' for v in is_min]
+                    
+                    # Format the dataframe for display
+                    display_df = scores_df.copy()
+                    for col in ['MAE (MW)', 'RMSE (MW)', 'MAPE (%)', 'Bias (MW)', 'R-squared']:
+                        if col in display_df.columns:
+                            display_df[col] = display_df[col].round(2)
+                    
+                    # Apply styling
+                    styled_df = display_df.style.apply(highlight_min, subset=['MAE (MW)', 'RMSE (MW)', 'MAPE (%)'])
+                    
+                    # Display the scores
+                    st.write("Forecast performance metrics compared to actual measurements:")
+                    st.dataframe(styled_df)
+                    
+                    # Also provide explanations of the metrics
+                    with st.expander("Explanation of Scoring Metrics"):
+                        st.markdown("""
+                        - **MAE (Mean Absolute Error)**: Average absolute difference between forecasted and actual values. Lower is better.
+                        - **RMSE (Root Mean Square Error)**: Square root of the average of squared differences. More sensitive to large errors. Lower is better.
+                        - **MAPE (Mean Absolute Percentage Error)**: Average percentage difference. Shows relative error. Lower is better.
+                        - **Bias**: Average difference (forecast - actual). Positive values indicate over-forecasting, negative values indicate under-forecasting.
+                        - **R-squared**: Coefficient of determination. Measures how well the forecast explains the variability in actual data. Higher is better (max 1.0).
+                        - **Data Points**: Number of time points used in the calculation.
+                        """)
+                    
+                    # Create a bar chart comparing RMSE values
+                    fig_scores = go.Figure()
+                    fig_scores.add_trace(go.Bar(
+                        x=scores_df['Forecast'],
+                        y=scores_df['RMSE (MW)'],
+                        text=scores_df['RMSE (MW)'].round(2),
+                        textposition='auto',
+                        name='RMSE (MW)'
+                    ))
+                    
+                    fig_scores.update_layout(
+                        title='Forecast Accuracy Comparison (RMSE)',
+                        xaxis_title='Forecast Model',
+                        yaxis_title='RMSE (MW) - Lower is Better',
+                        template='plotly_dark',
+                        height=400
+                    )
+                    
+                    st.plotly_chart(fig_scores, use_container_width=True)
+                    
+                    # Create a scatter plot of forecast vs actual for each model
+                    fig_scatter = go.Figure()
+                    for forecast in scores_df['Forecast']:
+                        fig_scatter.add_trace(go.Scatter(
+                            x=total_df['Measured & upscaled'].dropna(),
+                            y=total_df[forecast].loc[total_df['Measured & upscaled'].dropna().index],
+                            mode='markers',
+                            name=forecast
+                        ))
+                    
+                    # Add perfect forecast line (y=x)
+                    max_val = max(total_df['Measured & upscaled'].max(), total_df[scores_df['Forecast'][0]].max())
+                    fig_scatter.add_trace(go.Scatter(
+                        x=[0, max_val],
+                        y=[0, max_val],
+                        mode='lines',
+                        name='Perfect Forecast',
+                        line=dict(color='white', dash='dash')
+                    ))
+                    
+                    fig_scatter.update_layout(
+                        title='Forecast vs Actual Values',
+                        xaxis_title='Actual Measured Value (MW)',
+                        yaxis_title='Forecasted Value (MW)',
+                        template='plotly_dark',
+                        height=500
+                    )
+                    
+                    st.plotly_chart(fig_scatter, use_container_width=True)
+                    
+                    # Download button for scores
+                    scores_csv = scores_df.to_csv().encode('utf-8')
+                    st.download_button(
+                        label="Download Forecast Scores as CSV",
+                        data=scores_csv,
+                        file_name=f"solar_forecast_scores_{selected_date}.csv",
+                        mime="text/csv",
+                    )
         
         # Show both data tables
         with st.expander("View Regional Data"):
@@ -1427,6 +1608,7 @@ def solar_view():
         import traceback
         st.error(traceback.format_exc())
 
+        
 def main():
     st.sidebar.title("Navigation")
     
