@@ -1440,83 +1440,7 @@ def solar_view():
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Create individual plots for each model
-        for model_name, total_df in total_dfs.items():
-            model_fig = go.Figure()
-            
-            # Add traces for this model with uncertainty bands
-            # Add Day Ahead forecast
-            model_fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Day Ahead 11AM forecast'],
-                    name=f"ELIA DA 11AM",
-                    mode='lines',
-                    line_color='purple'
-                )
-            )
-            
-            # Add uncertainty band (rec_0.2 - rec_0.8)
-            model_fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['rec_0.8'],
-                    name=f"Upper bound",
-                    mode='lines',
-                    line_color='rgba(0,0,0,0)',
-                    showlegend=False
-                )
-            )
-            
-            model_fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['rec_0.2'],
-                    name=f"Uncertainty",
-                    mode='lines',
-                    fill='tonexty',
-                    fillcolor=f'rgba(0, 0, 255, 0.2)',
-                    line_color='rgba(0,0,0,0)',
-                    showlegend=True
-                )
-            )
-            
-            # Add rec forecast
-            model_fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['rec'],
-                    name=f"p50",
-                    mode='lines',
-                    line_color=model_colors.get(model_name, 'green')
-                )
-            )
-            
-            # Add actual measured data if available
-            if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
-                model_fig.add_trace(
-                    go.Scatter(
-                        x=total_df.index,
-                        y=total_df['Measured & upscaled'],
-                        name=f"Actual Measured & Upscaled",
-                        mode='lines',
-                        line_color='white',
-                        line_width=2
-                    )
-                )
-            
-            # Update layout
-            model_fig.update_layout(
-                xaxis_title="Time",
-                yaxis_title="MW",
-                yaxis=dict(range=[0, y_max]),
-                template="plotly_dark",
-                height=500,
-                title=f"Solar Forecast - {model_name} - {selected_date}",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-            )
-            
-            st.plotly_chart(model_fig, use_container_width=True)
+    
         
         # Calculate and display forecast scoring if actual measurements are available
         if actual_data is not None:
@@ -1527,7 +1451,7 @@ def solar_view():
                 score_data = combined_df.copy()
                 
                 # Keep only forecast columns and actual data
-                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col]
+                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col]
                 score_data = score_data.drop(columns=exclude_cols)
                 
                 # Calculate scores
