@@ -1450,5 +1450,6 @@ def main():
     elif page_choice == "Solar View":
         solar_view()
 
+
 if __name__ == "__main__":
     main()
