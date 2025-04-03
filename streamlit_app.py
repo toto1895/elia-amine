@@ -1215,7 +1215,7 @@ def solar_view():
             return
         
         # Filter data to match the selected date range
-        df = df[(df.index >= selected_date_utc):(df.index <= selected_date_end)]
+        df = df[(df.index >= selected_date_utc)&(df.index <= selected_date_end)]
         
         if df.empty:
             st.error("No forecast data available within the selected date range")
