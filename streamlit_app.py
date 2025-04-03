@@ -1492,8 +1492,8 @@ def solar_view():
                     fig_scores = go.Figure()
                     fig_scores.add_trace(go.Scatter(
                     x=score_data.index,
-                    y=score_data['Measured & upscaled'] - score_data['avg icon+dmi'],
-                    name=f"avg icon+dmi",
+                    y=score_data['Measured & upscaled'] - score_data['avg ALL'],
+                    name=f"avg ALL",
                     mode='lines',
                     line_color='red',
                     showlegend=False
