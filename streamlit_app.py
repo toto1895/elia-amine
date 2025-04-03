@@ -1261,7 +1261,7 @@ def solar_view():
             'rec_0.2': 'sum',
             'rec_0.8': 'sum'
         }).reset_index().set_index('Datetime')
-        
+        total_df = total_df.iloc[:96]
         # Fetch actual measured data from Elia
         with st.spinner("Fetching actual measured PV data from Elia..."):
             try:
@@ -1327,7 +1327,7 @@ def solar_view():
             go.Scatter(
                 x=total_df.index,
                 y=total_df['Day Ahead 11AM forecast'],
-                name=f"Total - Day Ahead ({model_display_name})",
+                name=f"ELIA DA 11AM",
                 mode='lines',
                 line_color=metric_colors['Day Ahead 11AM forecast']
             )
@@ -1338,7 +1338,7 @@ def solar_view():
             go.Scatter(
                 x=total_df.index,
                 y=total_df['rec_0.8'],
-                name=f"Total - Upper bound ({model_display_name})",
+                name=f"Upper bound ({model_display_name})",
                 mode='lines',
                 line_color='rgba(0,0,0,0)',
                 showlegend=False
@@ -1349,7 +1349,7 @@ def solar_view():
             go.Scatter(
                 x=total_df.index,
                 y=total_df['rec_0.2'],
-                name=f"Total - Uncertainty ({model_display_name})",
+                name=f"Uncertainty ({model_display_name})",
                 mode='lines',
                 fill='tonexty',
                 fillcolor=f'rgba(0, 0, 255, 0.2)',
@@ -1363,7 +1363,7 @@ def solar_view():
             go.Scatter(
                 x=total_df.index,
                 y=total_df['rec'],
-                name=f"Total - Forecast ({model_display_name})",
+                name=f"p50 ({model_display_name})",
                 mode='lines',
                 line_color=metric_colors['rec']
             )
@@ -1383,28 +1383,6 @@ def solar_view():
             )
         
         # Add most recent forecast if available
-        if 'Most recent forecast' in total_df.columns and not total_df['Most recent forecast'].isna().all():
-            fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Most recent forecast'],
-                    name=f"Most Recent Forecast (Elia)",
-                    mode='lines',
-                    line=dict(color=metric_colors['Most recent forecast'], dash='dash')
-                )
-            )
-            
-        # Add week ahead forecast if available
-        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
-            fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Week ahead forecast'],
-                    name=f"Week Ahead Forecast (Elia)",
-                    mode='lines',
-                    line=dict(color=metric_colors['Week ahead forecast'], dash='dot')
-                )
-            )
         
         # Update layout with dynamic y-axis range
         max_y_value = total_df.max().max()
