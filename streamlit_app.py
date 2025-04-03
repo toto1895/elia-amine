@@ -1252,14 +1252,14 @@ def solar_view():
         regions = regional_df['Region'].unique()
         st.write(f"Found {len(regions)} regions: {', '.join(regions)}")
         
-        # Let user select which regions to display
-        selected_regions = st.multiselect("Select regions to display", 
-                                         options=regions, 
-                                         default=regions[:min(3, len(regions))])
-        
-        if not selected_regions:
-            st.warning("Please select at least one region to display")
-            return
+        # Now instead of selecting regions, we'll sum all regions to get a total
+        # Group by datetime only and sum all regions together
+        total_df = regional_df.groupby('Datetime').agg({
+            'Day Ahead 11AM forecast': 'sum',
+            'rec': 'sum',
+            'rec_0.2': 'sum',
+            'rec_0.8': 'sum'
+        }).reset_index().set_index('Datetime')
             
         # Create figure
         fig = go.Figure()
@@ -1272,61 +1272,56 @@ def solar_view():
             'rec_0.8': 'darkblue'
         }
         
-        # Add traces for each selected region and metric
-        for region in selected_regions:
-            # Add forecast
-            if ('Day Ahead 11AM forecast', region) in pivot_df.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=pivot_df.index,
-                        y=pivot_df[('Day Ahead 11AM forecast', region)],
-                        name=f"{region} - Day Ahead ({model_display_name})",
-                        mode='lines',
-                        line_color=metric_colors['Day Ahead 11AM forecast']
-                    )
-                )
-            
-            # Add rec with uncertainty band
-            if ('rec', region) in pivot_df.columns:
-                # Add uncertainty band (rec_0.2 - rec_0.8)
-                if ('rec_0.2', region) in pivot_df.columns and ('rec_0.8', region) in pivot_df.columns:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=pivot_df.index,
-                            y=pivot_df[('rec_0.8', region)],
-                            name=f"{region} - Upper bound ({model_display_name})",
-                            mode='lines',
-                            line_color='rgba(0,0,0,0)',
-                            showlegend=False
-                        )
-                    )
-                    
-                    fig.add_trace(
-                        go.Scatter(
-                            x=pivot_df.index,
-                            y=pivot_df[('rec_0.2', region)],
-                            name=f"{region} - Uncertainty ({model_display_name})",
-                            mode='lines',
-                            fill='tonexty',
-                            fillcolor=f'rgba(0, 0, 255, 0.2)',
-                            line_color='rgba(0,0,0,0)',
-                            showlegend=True
-                        )
-                    )
-                
-                # Add rec forecast
-                fig.add_trace(
-                    go.Scatter(
-                        x=pivot_df.index,
-                        y=pivot_df[('rec', region)],
-                        name=f"{region} - Forecast ({model_display_name})",
-                        mode='lines',
-                        line_color=metric_colors['rec']
-                    )
-                )
+        # Add traces for total forecast with uncertainty bands
+        # Add forecast - Day Ahead
+        fig.add_trace(
+            go.Scatter(
+                x=total_df.index,
+                y=total_df['Day Ahead 11AM forecast'],
+                name=f"Total - Day Ahead ({model_display_name})",
+                mode='lines',
+                line_color=metric_colors['Day Ahead 11AM forecast']
+            )
+        )
+        
+        # Add uncertainty band (rec_0.2 - rec_0.8)
+        fig.add_trace(
+            go.Scatter(
+                x=total_df.index,
+                y=total_df['rec_0.8'],
+                name=f"Total - Upper bound ({model_display_name})",
+                mode='lines',
+                line_color='rgba(0,0,0,0)',
+                showlegend=False
+            )
+        )
+        
+        fig.add_trace(
+            go.Scatter(
+                x=total_df.index,
+                y=total_df['rec_0.2'],
+                name=f"Total - Uncertainty ({model_display_name})",
+                mode='lines',
+                fill='tonexty',
+                fillcolor=f'rgba(0, 0, 255, 0.2)',
+                line_color='rgba(0,0,0,0)',
+                showlegend=True
+            )
+        )
+        
+        # Add rec forecast
+        fig.add_trace(
+            go.Scatter(
+                x=total_df.index,
+                y=total_df['rec'],
+                name=f"Total - Forecast ({model_display_name})",
+                mode='lines',
+                line_color=metric_colors['rec']
+            )
+        )
         
         # Update layout with dynamic y-axis range
-        max_y_value = pivot_df.max().max()
+        max_y_value = total_df.max().max()
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
         
         fig.update_layout(
@@ -1335,22 +1330,33 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=600,
-            title=f"Solar Forecasts by Region - {model_display_name} - {selected_date}",
+            title=f"Total Solar Forecast - {model_display_name} - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
-        # Show the data table
+        # Show both data tables
         with st.expander("View Regional Data"):
             st.dataframe(regional_df)
+            
+        with st.expander("View Total Data"):
+            st.dataframe(total_df)
         
-        # Add download button for the data
-        csv = regional_df.to_csv().encode('utf-8')
+        # Add download buttons for both data types
+        regional_csv = regional_df.to_csv().encode('utf-8')
         st.download_button(
             label="Download Regional Solar Data as CSV",
-            data=csv,
+            data=regional_csv,
             file_name=f"solar_forecasts_by_region_{selected_date}.csv",
+            mime="text/csv",
+        )
+        
+        total_csv = total_df.to_csv().encode('utf-8')
+        st.download_button(
+            label="Download Total Solar Data as CSV",
+            data=total_csv,
+            file_name=f"solar_forecasts_total_{selected_date}.csv",
             mime="text/csv",
         )
         
@@ -1358,6 +1364,8 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
+
 def main():
     st.sidebar.title("Navigation")
     
