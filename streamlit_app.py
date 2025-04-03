@@ -1313,9 +1313,9 @@ def solar_view():
         # Define colors for different metrics
         metric_colors = {
             'Day Ahead 11AM forecast': 'orange',
-            'rec': 'red',
-            'rec_0.2': 'coral',
-            'rec_0.8': 'coral',
+            'rec': 'green',
+            'rec_0.2': 'green',
+            'rec_0.8': 'green',
             'Measured & upscaled': 'white',
         }
         
