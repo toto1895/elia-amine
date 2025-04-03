@@ -1450,6 +1450,7 @@ def solar_view():
                 # Prepare a DataFrame for scoring with data from all models
                 score_data = combined_df.copy().rename(columns={'Day Ahead 11AM forecast (icon_d2)':'ELIA DA 11AM'})
                 score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
+                score_data['avg ALL'] = 0.25*(score_data['p50 (dmi_seamless)']+score_data['p50 (metno_seamless)']+score_data['p50 (meteofrance_seamless)'] + score_data['p50 (icon_d2)'])
                 # Keep only forecast columns and actual data
                 exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
                                 or 'Day Ahead 11AM forecast (meteofrance_seamless)' in col or 'Day Ahead 11AM forecast (metno_seamless)' in col 
