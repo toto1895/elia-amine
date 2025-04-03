@@ -1452,6 +1452,9 @@ def solar_view():
                 score_data[score_data<10] = 0
                 score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
                 score_data['avg ALL'] = 0.25*(score_data['p50 (dmi_seamless)']+score_data['p50 (metno_seamless)']+score_data['p50 (meteofrance_seamless)'] + score_data['p50 (icon_d2)'])
+                
+                mask = (score_data.index >= time(5, 15)) & (score_data.index <= time(7, 30))
+                score_data.loc[mask, ['avg ALL','avg icon+dmi']] = score_data.loc[mask, ['avg ALL','avg icon+dmi']] - 120
                 # Keep only forecast columns and actual data
                 exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
                                 or 'Day Ahead 11AM forecast (meteofrance_seamless)' in col or 'Day Ahead 11AM forecast (metno_seamless)' in col 
