@@ -1080,6 +1080,7 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
+
 def solar_view():
     """Display solar forecasts grouped by region with optimized groupby operations."""
     import datetime
@@ -1098,7 +1099,7 @@ def solar_view():
         
         # Convert selected date to datetime with UTC timezone for consistent comparison
         selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC') + pd.Timedelta(days=1)
-        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
+        selected_date_end = selected_date_utc + pd.Timedelta(days=2)
         
         # Function to load and process solar forecast data
         @st.cache_data(ttl=3600, show_spinner=False)
@@ -1260,6 +1261,44 @@ def solar_view():
             'rec_0.2': 'sum',
             'rec_0.8': 'sum'
         }).reset_index().set_index('Datetime')
+        
+        # Fetch actual measured data from Elia
+        with st.spinner("Fetching actual measured PV data from Elia..."):
+            try:
+                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
+                                       sep=';')
+                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
+                                      'Measured & upscaled','Day Ahead 11AM forecast',
+                                      'Most recent forecast']]
+                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
+                
+                # Filter to match our date range
+                latest_pv = latest_pv[(latest_pv['Datetime'] >= selected_date_utc) & 
+                                     (latest_pv['Datetime'] <= selected_date_end)]
+                
+                # Group by Datetime and sum across regions
+                actual_pv = latest_pv.groupby('Datetime').agg({
+                    'Monitored capacity': 'sum',
+                    'Measured & upscaled': 'sum',
+                    'Day Ahead 11AM forecast': 'sum',
+                    'Most recent forecast': 'sum'
+                })
+                
+                # Keep only data points that match our total_df index
+                common_indices = actual_pv.index.intersection(total_df.index)
+                actual_pv = actual_pv.loc[common_indices]
+                
+                if not actual_pv.empty:
+                    st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
+                    # Add actual measured data to the total_df
+                    total_df.loc[common_indices, 'Measured & upscaled'] = actual_pv['Measured & upscaled']
+                    total_df.loc[common_indices, 'Most recent forecast'] = actual_pv['Most recent forecast']
+                else:
+                    st.warning("No matching actual measurement data found for the selected date range")
+            except Exception as e:
+                st.error(f"Error fetching actual data: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
             
         # Create figure
         fig = go.Figure()
@@ -1269,7 +1308,9 @@ def solar_view():
             'Day Ahead 11AM forecast': 'orange',
             'rec': 'blue',
             'rec_0.2': 'lightblue',
-            'rec_0.8': 'darkblue'
+            'rec_0.8': 'darkblue',
+            'Measured & upscaled': 'green',
+            'Most recent forecast': 'red'
         }
         
         # Add traces for total forecast with uncertainty bands
@@ -1320,6 +1361,31 @@ def solar_view():
             )
         )
         
+        # Add actual measured data if available
+        if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Measured & upscaled'],
+                    name=f"Actual Measured & Upscaled",
+                    mode='lines+markers',
+                    line_color=metric_colors['Measured & upscaled'],
+                    marker=dict(size=8)
+                )
+            )
+        
+        # Add most recent forecast if available
+        if 'Most recent forecast' in total_df.columns and not total_df['Most recent forecast'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Most recent forecast'],
+                    name=f"Most Recent Forecast (Elia)",
+                    mode='lines',
+                    line=dict(color=metric_colors['Most recent forecast'], dash='dash')
+                )
+            )
+        
         # Update layout with dynamic y-axis range
         max_y_value = total_df.max().max()
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
@@ -1364,6 +1430,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 
 def main():
