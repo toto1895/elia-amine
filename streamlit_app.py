@@ -1504,21 +1504,7 @@ def solar_view():
                     
                     # Add perfect forecast line (y=x)
                     max_val = max(combined_df['Measured & upscaled'].max(), combined_df[scores_df['Forecast'][0]].max())
-                    fig_scatter.add_trace(go.Scatter(
-                        x=[0, max_val],
-                        y=[0, max_val],
-                        mode='lines',
-                        name='Perfect Forecast',
-                        line=dict(color='white', dash='dash')
-                    ))
                     
-                    fig_scatter.update_layout(
-                        title='Forecast vs Actual Values',
-                        xaxis_title='Actual Measured Value (MW)',
-                        yaxis_title='Forecasted Value (MW)',
-                        template='plotly_dark',
-                        height=500
-                    )
                     
                     st.plotly_chart(fig_scatter, use_container_width=True)
                     
