@@ -1202,10 +1202,12 @@ def solar_view():
                 st.error(traceback.format_exc())
                 return None
         
+        # Model selection
+        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless']
+        model_name = st.selectbox("Select model", options=available_models, index=0)
+        
         # Load solar forecast data
-        with st.spinner("Loading solar forecast data..."):
-            # For simplicity, we'll use just one model source
-            model_name = 'meteofrance_seamless'  # You can change this or add more models if needed
+        with st.spinner(f"Loading {model_name} solar forecast data..."):
             df = load_solar_forecast_data(model_name, selected_date)
         
         if df is None:
@@ -1213,7 +1215,7 @@ def solar_view():
             return
         
         # Filter data to match the selected date range
-        df = df[(df.index >= selected_date_utc) ]
+        df = df[(df.index >= selected_date_utc) & (df.index < selected_date_end)]
         
         if df.empty:
             st.error("No forecast data available within the selected date range")
@@ -1225,6 +1227,9 @@ def solar_view():
         # Ensure 'Region' column exists and create a copy to avoid SettingWithCopyWarning
         df_plot = df.copy()
         
+        # Create a copy of model name for displaying in plots
+        model_display_name = model_name
+        
         # First create a DataFrame with MultiIndex (datetime, region)
         grouped_data = []
         for timestamp, group in df_plot.groupby(df_plot.index):
@@ -1233,6 +1238,7 @@ def solar_view():
                 row_data = {
                     'Datetime': timestamp,
                     'Region': region,
+                    'Model': model_display_name,
                     'Day Ahead 11AM forecast': region_group['Day Ahead 11AM forecast'].sum(),
                     'rec': region_group['rec'].sum(),
                     'rec_0.2': region_group['rec_0.2'].sum(),
@@ -1247,9 +1253,9 @@ def solar_view():
         # Convert to DataFrame
         regional_df = pd.DataFrame(grouped_data)
         
-        # Convert to pivot table for easier plotting
-        pivot_df = regional_df.pivot(index='Datetime', columns='Region', 
-                                     values=['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8'])
+        # Convert to pivot table for easier plotting - include Model in the columns
+        pivot_df = regional_df.pivot(index='Datetime', columns=['Region'], 
+                                    values=['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8'])
         
         # Display summary information
         regions = regional_df['Region'].unique()
@@ -1283,7 +1289,7 @@ def solar_view():
                     go.Scatter(
                         x=pivot_df.index,
                         y=pivot_df[('Day Ahead 11AM forecast', region)],
-                        name=f"{region} - Day Ahead",
+                        name=f"{region} - Day Ahead ({model_display_name})",
                         mode='lines',
                         line_color=metric_colors['Day Ahead 11AM forecast']
                     )
@@ -1297,7 +1303,7 @@ def solar_view():
                         go.Scatter(
                             x=pivot_df.index,
                             y=pivot_df[('rec_0.8', region)],
-                            name=f"{region} - Upper bound",
+                            name=f"{region} - Upper bound ({model_display_name})",
                             mode='lines',
                             line_color='rgba(0,0,0,0)',
                             showlegend=False
@@ -1308,7 +1314,7 @@ def solar_view():
                         go.Scatter(
                             x=pivot_df.index,
                             y=pivot_df[('rec_0.2', region)],
-                            name=f"{region} - Uncertainty Range",
+                            name=f"{region} - Uncertainty ({model_display_name})",
                             mode='lines',
                             fill='tonexty',
                             fillcolor=f'rgba(0, 0, 255, 0.2)',
@@ -1322,7 +1328,7 @@ def solar_view():
                     go.Scatter(
                         x=pivot_df.index,
                         y=pivot_df[('rec', region)],
-                        name=f"{region} - Forecast",
+                        name=f"{region} - Forecast ({model_display_name})",
                         mode='lines',
                         line_color=metric_colors['rec']
                     )
@@ -1338,7 +1344,7 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=600,
-            title=f"Solar Forecasts by Region - {selected_date}",
+            title=f"Solar Forecasts by Region - {model_display_name} - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
@@ -1361,7 +1367,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
