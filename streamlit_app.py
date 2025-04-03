@@ -1080,9 +1080,8 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-
 def solar_view():
-    """Display solar forecasts from various models for a selected date."""
+    """Display solar forecasts grouped by region."""
     import datetime
     
     st.subheader("Solar View")
@@ -1101,9 +1100,9 @@ def solar_view():
         selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')
         selected_date_end = selected_date_utc + pd.Timedelta(days=1)
         
-        # Function to load forecast models from Google Cloud Storage
+        # Function to load and process solar forecast data
         @st.cache_data(ttl=3600, show_spinner=False)
-        def load_solar_forecast_model(model_name, selected_date):
+        def load_solar_forecast_data(model_name, selected_date):
             try:
                 # Create Google Cloud Storage client
                 service_account_info = json.loads(GCLOUD)
@@ -1111,7 +1110,7 @@ def solar_view():
                 storage_client = storage.Client(credentials=credentials)
                 bucket = storage_client.bucket('oracle_predictions')
                 
-                # List files for this model from the regional subdirectory
+                # List files from the regional subdirectory
                 prefix = f'predico-elia/forecasts_solar/regional/{model_name}'
                 blobs = list(bucket.list_blobs(prefix=prefix))
                 
@@ -1136,7 +1135,7 @@ def solar_view():
                         continue
                 
                 if not date_file_pairs:
-                    st.warning("Could not parse dates from filenames")
+                    st.warning(f"Could not parse dates from filenames for model: {model_name}")
                     return None
                 
                 # Find files for the selected date
@@ -1150,7 +1149,7 @@ def solar_view():
                     # If no files for the selected date, find the closest date
                     date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
                     best_match = date_file_pairs[0][1]
-                    st.info(f"No data found for {selected_date_obj}. Using closest available date: {date_file_pairs[0][0].date()}")
+                    st.info(f"No data found for {selected_date_obj} in model {model_name}. Using closest available date: {date_file_pairs[0][0].date()}")
                 
                 # Download and load the file
                 blob = bucket.blob(best_match)
@@ -1161,35 +1160,33 @@ def solar_view():
                 
                 # Process the DataFrame
                 if df.empty:
-                    st.warning("File is empty")
+                    st.warning(f"Empty DataFrame for model: {model_name}")
                     return None
                 
-                # Check for expected columns
-                # First, display all columns for debugging
-                st.text(f"Available columns: {df.columns.tolist()}")
+                # Ensure we have the expected columns
+                expected_columns = ['Datetime', '0.05', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '0.95', 
+                                   'Region', 'Monitored capacity', 'Measured & upscaled', 
+                                   'Day Ahead 11AM forecast', 'Most recent forecast', 'rec', 'rec_0.2', 'rec_0.8']
                 
-                # Standardize column names if needed
-                # Assuming the regional model uses the same format as the individual models
-                if all(col in df.columns for col in [0.1, 0.5, 0.9]):
-                    # Rename columns to match expected format
-                    df = df.rename(columns={0.1: 'p10', 0.5: 'p50', 0.9: 'p90'})
-                elif all(col in df.columns for col in ['0.1', '0.5', '0.9']):
-                    # Rename string columns
-                    df = df.rename(columns={'0.1': 'p10', '0.5': 'p50', '0.9': 'p90'})
+                # Check for minimal required columns for plotting
+                required_cols = ['Region', 'Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
+                missing_cols = [col for col in required_cols if col not in df.columns]
+                
+                if missing_cols:
+                    st.warning(f"Missing required columns in {model_name} data: {missing_cols}")
+                    st.write(f"Available columns: {df.columns.tolist()}")
+                    return None
                 
                 # Ensure datetime index
-                if not isinstance(df.index, pd.DatetimeIndex):
-                    if 'datetime' in df.columns:
-                        df.index = pd.to_datetime(df['datetime'])
-                    elif 'date' in df.columns:
-                        df.index = pd.to_datetime(df['date'])
-                    else:
-                        # Create synthetic index based on selected date
-                        df.index = pd.date_range(
-                            start=selected_date_utc,
-                            periods=len(df),
-                            freq='H'
-                        )
+                if 'Datetime' in df.columns:
+                    df.index = pd.to_datetime(df['Datetime'])
+                elif not isinstance(df.index, pd.DatetimeIndex):
+                    # Create synthetic index based on selected date
+                    df.index = pd.date_range(
+                        start=selected_date_utc,
+                        periods=len(df),
+                        freq='H'
+                    )
                 
                 # Make sure index is timezone-aware in UTC for consistent comparison
                 if df.index.tz is None:
@@ -1200,81 +1197,107 @@ def solar_view():
                 return df
                 
             except Exception as e:
-                st.error(f"Error loading regional solar forecast: {str(e)}")
+                st.error(f"Error loading {model_name} model: {str(e)}")
                 import traceback
                 st.error(traceback.format_exc())
                 return None
         
-        # Load forecast models
-        progress_bar = st.progress(0)
-        progress_text = st.empty()
+        # Load solar forecast data
+        with st.spinner("Loading solar forecast data..."):
+            # For simplicity, we'll use just one model source
+            model_name = 'meteofrance_seamless'  # You can change this or add more models if needed
+            df = load_solar_forecast_data(model_name, selected_date)
         
-        models = ['dmi_seamless', 'icon_d2', 'metno_seamless', 'meteofrance_seamless']
-        forecasts = {}
-        
-        for i, model in enumerate(models):
-            progress_text.text(f"Loading {model} forecast...")
-            result = load_solar_forecast_model(model, selected_date)
-            print(result)
-            if result is not None:
-                # Filter model data to match the selected date range
-                #result = result[(result.index >= selected_date_utc) & 
-                 #              (result.index < selected_date_end)]
-                forecasts[model] = result
-            progress_bar.progress((i + 1) / len(models))
-        
-        progress_bar.empty()
-        progress_text.empty()
-        
-        if not forecasts:
+        if df is None:
             st.error("No forecast data available for the selected date")
             return
         
-        # Combine forecasts into one DataFrame
-        combined_data = pd.concat(list(forecasts.values()), axis=1)
-        combined_data.index = pd.to_datetime(combined_data.index)
+        # Filter data to match the selected date range
+        df = df[(df.index >= selected_date_utc) & (df.index < selected_date_end)]
         
-        if combined_data.empty:
+        if df.empty:
             st.error("No forecast data available within the selected date range")
             return
         
-        # Create a time index with hourly intervals for the selected date
-        time_index = pd.date_range(
-            start=selected_date_utc,
-            end=selected_date_end - pd.Timedelta(minutes=1),
-            freq='H'
-        )
+        # Group by region and sum the values
+        st.write("Grouping data by region...")
         
-        # Reindex data to ensure consistent time points
-        plot_data = combined_data.reindex(time_index, method='nearest')
-        plot_data = plot_data.reset_index().rename(columns={'index': 'Datetime'})
-        plot_data = plot_data.replace(0.0, np.nan)
+        # Ensure 'Region' column exists and create a copy to avoid SettingWithCopyWarning
+        df_plot = df.copy()
         
-        # Plot the forecasts
+        # First create a DataFrame with MultiIndex (datetime, region)
+        grouped_data = []
+        for timestamp, group in df_plot.groupby(df_plot.index):
+            for region, region_group in group.groupby('Region'):
+                # Sum metrics for each region at each timestamp
+                row_data = {
+                    'Datetime': timestamp,
+                    'Region': region,
+                    'Day Ahead 11AM forecast': region_group['Day Ahead 11AM forecast'].sum(),
+                    'rec': region_group['rec'].sum(),
+                    'rec_0.2': region_group['rec_0.2'].sum(),
+                    'rec_0.8': region_group['rec_0.8'].sum()
+                }
+                grouped_data.append(row_data)
+        
+        if not grouped_data:
+            st.error("Failed to group data by region")
+            return
+            
+        # Convert to DataFrame
+        regional_df = pd.DataFrame(grouped_data)
+        
+        # Convert to pivot table for easier plotting
+        pivot_df = regional_df.pivot(index='Datetime', columns='Region', 
+                                     values=['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8'])
+        
+        # Display summary information
+        regions = regional_df['Region'].unique()
+        st.write(f"Found {len(regions)} regions: {', '.join(regions)}")
+        
+        # Let user select which regions to display
+        selected_regions = st.multiselect("Select regions to display", 
+                                          options=regions, 
+                                          default=regions[:min(3, len(regions))])
+        
+        if not selected_regions:
+            st.warning("Please select at least one region to display")
+            return
+            
+        # Create figure
         fig = go.Figure()
         
-        # Plot the forecasts
-        model_colors = {
-            'dmi_seamless': 'green',
-            'icon_d2': 'purple',
-            'metno_seamless': 'red',
-            'meteofrance_seamless': 'blue'
+        # Define colors for different metrics
+        metric_colors = {
+            'Day Ahead 11AM forecast': 'orange',
+            'rec': 'blue',
+            'rec_0.2': 'lightblue',
+            'rec_0.8': 'darkblue'
         }
         
-        # Add model forecasts with a standard format
-        for model_name, color in model_colors.items():
-            p50_col = f'{model_name}_p50'
-            p10_col = f'{model_name}_p10'
-            p90_col = f'{model_name}_p90'
+        # Add traces for each selected region and metric
+        for region in selected_regions:
+            # Add forecast
+            if ('Day Ahead 11AM forecast', region) in pivot_df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=pivot_df.index,
+                        y=pivot_df[('Day Ahead 11AM forecast', region)],
+                        name=f"{region} - Day Ahead",
+                        mode='lines',
+                        line_color=metric_colors['Day Ahead 11AM forecast']
+                    )
+                )
             
-            if p50_col in plot_data.columns:
-                # Add uncertainty band (p10-p90) if available
-                if p10_col in plot_data.columns and p90_col in plot_data.columns:
+            # Add rec with uncertainty band
+            if ('rec', region) in pivot_df.columns:
+                # Add uncertainty band (rec_0.2 - rec_0.8)
+                if ('rec_0.2', region) in pivot_df.columns and ('rec_0.8', region) in pivot_df.columns:
                     fig.add_trace(
                         go.Scatter(
-                            x=plot_data['Datetime'],
-                            y=plot_data[p90_col],
-                            name=f'{region} p90',
+                            x=pivot_df.index,
+                            y=pivot_df[('rec_0.8', region)],
+                            name=f"{region} - Upper bound",
                             mode='lines',
                             line_color='rgba(0,0,0,0)',
                             showlegend=False
@@ -1283,31 +1306,30 @@ def solar_view():
                     
                     fig.add_trace(
                         go.Scatter(
-                            x=plot_data['Datetime'],
-                            y=plot_data[p10_col],
-                            name=f'{region} range [p10-p90]',
+                            x=pivot_df.index,
+                            y=pivot_df[('rec_0.2', region)],
+                            name=f"{region} - Uncertainty Range",
                             mode='lines',
                             fill='tonexty',
-                            fillcolor=f'rgba({color.replace("rgb","").replace("(","").replace(")","")}, 0.2)' 
-                                if color.startswith('rgb') else 'rgba(100,100,100,0.2)',
+                            fillcolor=f'rgba(0, 0, 255, 0.2)',
                             line_color='rgba(0,0,0,0)',
                             showlegend=True
                         )
                     )
                 
-                # Add p50 forecast
+                # Add rec forecast
                 fig.add_trace(
                     go.Scatter(
-                        x=plot_data['Datetime'],
-                        y=plot_data[p50_col],
-                        name=f'{region} (p50)',
+                        x=pivot_df.index,
+                        y=pivot_df[('rec', region)],
+                        name=f"{region} - Forecast",
                         mode='lines',
-                        line_color=color
+                        line_color=metric_colors['rec']
                     )
                 )
         
         # Update layout with dynamic y-axis range
-        max_y_value = plot_data.select_dtypes(include=[np.number]).max().max()
+        max_y_value = pivot_df.max().max()
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
         
         fig.update_layout(
@@ -1315,19 +1337,23 @@ def solar_view():
             yaxis_title="MW",
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
-            height=500,
-            title=f"Solar Forecasts - {selected_date}",
+            height=600,
+            title=f"Solar Forecasts by Region - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
+        # Show the data table
+        with st.expander("View Regional Data"):
+            st.dataframe(regional_df)
+        
         # Add download button for the data
-        csv = plot_data.to_csv().encode('utf-8')
+        csv = regional_df.to_csv().encode('utf-8')
         st.download_button(
-            label="Download Solar Data as CSV",
+            label="Download Regional Solar Data as CSV",
             data=csv,
-            file_name=f"solar_forecasts_{selected_date}.csv",
+            file_name=f"solar_forecasts_by_region_{selected_date}.csv",
             mime="text/csv",
         )
         
@@ -1335,6 +1361,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 def main():
     st.sidebar.title("Navigation")
