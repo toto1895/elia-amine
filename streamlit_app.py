@@ -1453,6 +1453,7 @@ def solar_view():
                 score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
                 score_data['avg ALL'] = 0.25*(score_data['p50 (dmi_seamless)']+score_data['p50 (metno_seamless)']+score_data['p50 (meteofrance_seamless)'] + score_data['p50 (icon_d2)'])
                 
+                from datetime import time
                 mask = (score_data.index >= time(5, 15)) & (score_data.index <= time(7, 30))
                 score_data.loc[mask, ['avg ALL','avg icon+dmi']] = score_data.loc[mask, ['avg ALL','avg icon+dmi']] - 120
                 # Keep only forecast columns and actual data
