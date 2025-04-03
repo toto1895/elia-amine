@@ -1384,7 +1384,7 @@ def solar_view():
             'meteofrance_seamless': 'green',
             'dmi_seamless': 'blue',
             'icon_d2': 'red',
-            'metno_seamless': 'orange'
+            'metno_seamless': 'yellow'
         }
         
         # Add traces for each model's p50 forecast
@@ -1407,7 +1407,7 @@ def solar_view():
                 y=combined_df[f'Day Ahead 11AM forecast ({first_model})'],
                 name=f"ELIA DA 11AM",
                 mode='lines',
-                line_color='purple'
+                line_color='orange'
             )
         )
         
