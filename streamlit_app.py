@@ -1478,12 +1478,12 @@ def solar_view():
                     
                     # Format the dataframe for display
                     display_df = scores_df.copy()
-                    for col in ['MAE (MW)', 'RMSE (MW)', 'MAPE (%)', 'Bias (MW)', 'R-squared']:
+                    for col in ['MAE (MW)', 'RMSE (MW)', 'Bias (MW)']:
                         if col in display_df.columns:
                             display_df[col] = display_df[col].round(2)
                     
                     # Apply styling
-                    styled_df = display_df.style.apply(highlight_min, subset=['MAE (MW)', 'RMSE (MW)', 'MAPE (%)'])
+                    styled_df = display_df.style.apply(highlight_min, subset=['MAE (MW)', 'RMSE (MW)'])
                     
                     # Display the scores
                     st.write("Forecast performance metrics compared to actual measurements:")
@@ -1494,10 +1494,7 @@ def solar_view():
                         st.markdown("""
                         - **MAE (Mean Absolute Error)**: Average absolute difference between forecasted and actual values. Lower is better.
                         - **RMSE (Root Mean Square Error)**: Square root of the average of squared differences. More sensitive to large errors. Lower is better.
-                        - **MAPE (Mean Absolute Percentage Error)**: Average percentage difference. Shows relative error. Lower is better.
                         - **Bias**: Average difference (forecast - actual). Positive values indicate over-forecasting, negative values indicate under-forecasting.
-                        - **R-squared**: Coefficient of determination. Measures how well the forecast explains the variability in actual data. Higher is better (max 1.0).
-                        - **Data Points**: Number of time points used in the calculation.
                         """)
                     
                     # Create a bar chart comparing RMSE values
