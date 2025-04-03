@@ -1448,10 +1448,13 @@ def solar_view():
             
             with st.spinner("Calculating forecast scores..."):
                 # Prepare a DataFrame for scoring with data from all models
-                score_data = combined_df.copy()
+                score_data = combined_df.copy().rename(columns={'Day Ahead 11AM forecast (icon_d2_seamless)':'ELIA DA 11AM'})
                 
                 # Keep only forecast columns and actual data
-                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col]
+                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
+                                or 'Day Ahead 11AM forecast (meteofrance_seamless)' in col or 'Day Ahead 11AM forecast (metno_seamless)' in col 
+                                or 'Day Ahead 11AM forecast (dmi_seamless)' in col 
+                                ]
                 score_data = score_data.drop(columns=exclude_cols)
                 
                 # Calculate scores
