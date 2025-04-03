@@ -1490,8 +1490,8 @@ def solar_view():
                     # Create a bar chart comparing RMSE values
                     fig_scores = go.Figure()
                     fig_scores.add_trace(go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Measured & upscaled'] - total_df['avg icon+dmi'],
+                    x=score_data.index,
+                    y=score_data['Measured & upscaled'] - score_data['avg icon+dmi'],
                     name=f"avg icon+dmi",
                     mode='lines',
                     line_color='red',
