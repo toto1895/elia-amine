@@ -1491,21 +1491,6 @@ def solar_view():
                     
                     
                     # Create a scatter plot of forecast vs actual for each model
-                    fig_scatter = go.Figure()
-                    
-                    for forecast in scores_df['Forecast']:
-                        fig_scatter.add_trace(go.Scatter(
-                            x=combined_df['Measured & upscaled'].dropna(),
-                            y=combined_df[forecast].loc[combined_df['Measured & upscaled'].dropna().index],
-                            mode='markers',
-                            name=forecast
-                        ))
-                    
-                    # Add perfect forecast line (y=x)
-                    max_val = max(combined_df['Measured & upscaled'].max(), combined_df[scores_df['Forecast'][0]].max())
-                    
-                    
-                    st.plotly_chart(fig_scatter, use_container_width=True)
                     
                     # Download button for scores
                     scores_csv = scores_df.to_csv().encode('utf-8')
