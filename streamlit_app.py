@@ -1261,7 +1261,7 @@ def solar_view():
             'rec_0.2': 'sum',
             'rec_0.8': 'sum'
         }).reset_index().set_index('Datetime')
-        total_df = total_df.iloc[:96]
+        total_df = total_df.resample('15min').interpolate().iloc[:96]
         # Fetch actual measured data from Elia
         with st.spinner("Fetching actual measured PV data from Elia..."):
             try:
