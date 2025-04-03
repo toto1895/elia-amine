@@ -1313,12 +1313,10 @@ def solar_view():
         # Define colors for different metrics
         metric_colors = {
             'Day Ahead 11AM forecast': 'orange',
-            'rec': 'blue',
-            'rec_0.2': 'lightblue',
-            'rec_0.8': 'darkblue',
-            'Measured & upscaled': 'green',
-            'Most recent forecast': 'red',
-            'Week ahead forecast': 'purple'
+            'rec': 'red',
+            'rec_0.2': 'coral',
+            'rec_0.8': 'coral',
+            'Measured & upscaled': 'white',
         }
         
         # Add traces for total forecast with uncertainty bands
@@ -1376,7 +1374,7 @@ def solar_view():
                     x=total_df.index,
                     y=total_df['Measured & upscaled'],
                     name=f"Actual Measured & Upscaled",
-                    mode='lines+markers',
+                    mode='lines',
                     line_color=metric_colors['Measured & upscaled'],
                     marker=dict(size=8)
                 )
