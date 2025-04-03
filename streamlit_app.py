@@ -1097,8 +1097,8 @@ def solar_view():
             time.sleep(1)
         
         # Convert selected date to datetime with UTC timezone for consistent comparison
-        selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')
-        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
+        selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')+ pd.Timedelta(days=1)
+        selected_date_end = selected_date_utc + pd.Timedelta(days=2)
         
         # Function to load and process solar forecast data
         @st.cache_data(ttl=3600, show_spinner=False)
@@ -1215,7 +1215,7 @@ def solar_view():
             return
         
         # Filter data to match the selected date range
-        df = df[df.index >= selected_date_utc+pd.Timedelta(days=1):]
+        df = df[(df.index >= selected_date_utc):(df.index <= selected_date_end)]
         
         if df.empty:
             st.error("No forecast data available within the selected date range")
