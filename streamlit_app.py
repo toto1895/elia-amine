@@ -1457,7 +1457,6 @@ def solar_view():
                                 ]
                 score_data = score_data.drop(columns=exclude_cols)
                 
-                # Calculate scores
                 scores_df = calculate_forecast_scores(score_data)
                 
                 if scores_df is not None:
