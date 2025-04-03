@@ -1448,7 +1448,7 @@ def solar_view():
             
             with st.spinner("Calculating forecast scores..."):
                 # Prepare a DataFrame for scoring with data from all models
-                score_data = combined_df.copy().rename(columns={'Day Ahead 11AM forecast (icon_d2_seamless)':'ELIA DA 11AM'})
+                score_data = combined_df.copy().rename(columns={'Day Ahead 11AM forecast (icon_d2)':'ELIA DA 11AM'})
                 
                 # Keep only forecast columns and actual data
                 exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
@@ -1489,24 +1489,7 @@ def solar_view():
                         """)
                     
                     # Create a bar chart comparing RMSE values
-                    fig_scores = go.Figure()
-                    fig_scores.add_trace(go.Bar(
-                        x=scores_df['Forecast'],
-                        y=scores_df['RMSE (MW)'],
-                        text=scores_df['RMSE (MW)'].round(2),
-                        textposition='auto',
-                        name='RMSE (MW)'
-                    ))
                     
-                    fig_scores.update_layout(
-                        title='Forecast Accuracy Comparison (RMSE)',
-                        xaxis_title='Forecast Model',
-                        yaxis_title='RMSE (MW) - Lower is Better',
-                        template='plotly_dark',
-                        height=400
-                    )
-                    
-                    st.plotly_chart(fig_scores, use_container_width=True)
                     
                     # Create a scatter plot of forecast vs actual for each model
                     fig_scatter = go.Figure()
