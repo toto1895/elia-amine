@@ -1488,7 +1488,25 @@ def solar_view():
                         """)
                     
                     # Create a bar chart comparing RMSE values
+                    fig_scores = go.Figure()
+                    fig_scores.add_trace(go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Measured & upscaled'] - total_df['avg icon+dmi'],
+                    name=f"avg icon+dmi",
+                    mode='lines',
+                    line_color='red',
+                    showlegend=False
+                    ))
                     
+                    fig_scores.update_layout(
+                        title='error profile ',
+                        xaxis_title='Forecast Model',
+                        yaxis_title='error (MW)',
+                        template='plotly_dark',
+                        height=400
+                    )
+                    
+                    st.plotly_chart(fig_scores, use_container_width=True)
                     
                     # Create a scatter plot of forecast vs actual for each model
                     
