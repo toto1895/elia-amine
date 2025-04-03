@@ -1099,7 +1099,7 @@ def solar_view():
         
         # Convert selected date to datetime with UTC timezone for consistent comparison
         selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC') + pd.Timedelta(days=1)
-        selected_date_end = selected_date_utc + pd.Timedelta(days=2)
+        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
         
         # Function to load and process solar forecast data
         @st.cache_data(ttl=3600, show_spinner=False)
