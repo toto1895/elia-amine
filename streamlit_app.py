@@ -1080,6 +1080,7 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
+
 def solar_view():
     """Display solar forecasts from various models for a selected date."""
     import datetime
@@ -1110,14 +1111,15 @@ def solar_view():
                 storage_client = storage.Client(credentials=credentials)
                 bucket = storage_client.bucket('oracle_predictions')
                 
-                # List files for this model
-                prefix = f'predico-elia/forecasts_solar/{model_name}'
+                # List files for this model from the regional subdirectory
+                prefix = f'predico-elia/forecasts_solar/regional/{model_name}'
                 blobs = list(bucket.list_blobs(prefix=prefix))
                 
                 # Filter for parquet files
                 valid_files = [blob.name for blob in blobs if blob.name.endswith(".parquet")]
                 
                 if not valid_files:
+                    st.warning(f"No solar forecast files found for model: {model_name}")
                     return None
                 
                 # Extract date info and find relevant file
@@ -1134,6 +1136,7 @@ def solar_view():
                         continue
                 
                 if not date_file_pairs:
+                    st.warning("Could not parse dates from filenames")
                     return None
                 
                 # Find files for the selected date
@@ -1147,6 +1150,7 @@ def solar_view():
                     # If no files for the selected date, find the closest date
                     date_file_pairs.sort(key=lambda x: abs((x[0] - pd.Timestamp(selected_date)).total_seconds()))
                     best_match = date_file_pairs[0][1]
+                    st.info(f"No data found for {selected_date_obj}. Using closest available date: {date_file_pairs[0][0].date()}")
                 
                 # Download and load the file
                 blob = bucket.blob(best_match)
@@ -1157,9 +1161,15 @@ def solar_view():
                 
                 # Process the DataFrame
                 if df.empty:
+                    st.warning("File is empty")
                     return None
                 
-                # Check for p50, p10, p90 columns (or convert equivalents)
+                # Check for expected columns
+                # First, display all columns for debugging
+                st.text(f"Available columns: {df.columns.tolist()}")
+                
+                # Standardize column names if needed
+                # Assuming the regional model uses the same format as the individual models
                 if all(col in df.columns for col in [0.1, 0.5, 0.9]):
                     # Rename columns to match expected format
                     df = df.rename(columns={0.1: 'p10', 0.5: 'p50', 0.9: 'p90'})
@@ -1167,43 +1177,32 @@ def solar_view():
                     # Rename string columns
                     df = df.rename(columns={'0.1': 'p10', '0.5': 'p50', '0.9': 'p90'})
                 
-                # Check if we now have standard columns
-                standard_cols = ['p50', 'p10', 'p90']
-                available_cols = [col for col in standard_cols if col in df.columns]
-                
-                if not available_cols:
-                    st.warning(f"No standard forecast columns found in {model_name} data")
-                    return None
-                
-                # Prepare output DataFrame with renamed columns
-                result = pd.DataFrame()
-                for col in available_cols:
-                    result[f"{model_name}_{col}"] = df[col]
-                
                 # Ensure datetime index
-                if not isinstance(result.index, pd.DatetimeIndex):
+                if not isinstance(df.index, pd.DatetimeIndex):
                     if 'datetime' in df.columns:
-                        result.index = pd.to_datetime(df['datetime'])
+                        df.index = pd.to_datetime(df['datetime'])
                     elif 'date' in df.columns:
-                        result.index = pd.to_datetime(df['date'])
+                        df.index = pd.to_datetime(df['date'])
                     else:
                         # Create synthetic index based on selected date
-                        result.index = pd.date_range(
+                        df.index = pd.date_range(
                             start=selected_date_utc,
-                            periods=len(result),
+                            periods=len(df),
                             freq='H'
                         )
                 
                 # Make sure index is timezone-aware in UTC for consistent comparison
-                if result.index.tz is None:
-                    result.index = result.index.tz_localize('UTC')
-                elif result.index.tz.zone != 'UTC':
-                    result.index = result.index.tz_convert('UTC')
+                if df.index.tz is None:
+                    df.index = df.index.tz_localize('UTC')
+                elif df.index.tz.zone != 'UTC':
+                    df.index = df.index.tz_convert('UTC')
                 
-                return result
+                return df
                 
             except Exception as e:
-                st.warning(f"Error loading {model_name} model: {str(e)}")
+                st.error(f"Error loading regional solar forecast: {str(e)}")
+                import traceback
+                st.error(traceback.format_exc())
                 return None
         
         # Load forecast models
@@ -1234,6 +1233,10 @@ def solar_view():
         combined_data = pd.concat(list(forecasts.values()), axis=1)
         combined_data.index = pd.to_datetime(combined_data.index)
         
+        if combined_data.empty:
+            st.error("No forecast data available within the selected date range")
+            return
+        
         # Create a time index with hourly intervals for the selected date
         time_index = pd.date_range(
             start=selected_date_utc,
@@ -1249,7 +1252,7 @@ def solar_view():
         # Plot the forecasts
         fig = go.Figure()
         
-        # Add model forecasts with a standard format
+        # Plot the forecasts
         model_colors = {
             'dmi_seamless': 'green',
             'icon_d2': 'purple',
@@ -1257,6 +1260,7 @@ def solar_view():
             'meteofrance_seamless': 'blue'
         }
         
+        # Add model forecasts with a standard format
         for model_name, color in model_colors.items():
             p50_col = f'{model_name}_p50'
             p10_col = f'{model_name}_p10'
@@ -1269,7 +1273,7 @@ def solar_view():
                         go.Scatter(
                             x=plot_data['Datetime'],
                             y=plot_data[p90_col],
-                            name=f'{model_name} p90',
+                            name=f'{region} p90',
                             mode='lines',
                             line_color='rgba(0,0,0,0)',
                             showlegend=False
@@ -1280,11 +1284,11 @@ def solar_view():
                         go.Scatter(
                             x=plot_data['Datetime'],
                             y=plot_data[p10_col],
-                            name=f'{model_name} range [p10-p90]',
+                            name=f'{region} range [p10-p90]',
                             mode='lines',
                             fill='tonexty',
                             fillcolor=f'rgba({color.replace("rgb","").replace("(","").replace(")","")}, 0.2)' 
-                                if color.startswith('rgb') else f'rgba({color=="green" and "0,128,0" or color=="purple" and "128,0,128" or color=="red" and "255,0,0" or color=="blue" and "0,0,255" or "0,0,0"}, 0.2)',
+                                if color.startswith('rgb') else 'rgba(100,100,100,0.2)',
                             line_color='rgba(0,0,0,0)',
                             showlegend=True
                         )
@@ -1295,7 +1299,7 @@ def solar_view():
                     go.Scatter(
                         x=plot_data['Datetime'],
                         y=plot_data[p50_col],
-                        name=f'{model_name} (p50)',
+                        name=f'{region} (p50)',
                         mode='lines',
                         line_color=color
                     )
@@ -1320,7 +1324,7 @@ def solar_view():
         # Add download button for the data
         csv = plot_data.to_csv().encode('utf-8')
         st.download_button(
-            label="Download Data as CSV",
+            label="Download Solar Data as CSV",
             data=csv,
             file_name=f"solar_forecasts_{selected_date}.csv",
             mime="text/csv",
