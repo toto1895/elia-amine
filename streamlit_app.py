@@ -1337,7 +1337,7 @@ def solar_view():
                             # Keep only data points that match our total_df index
                             common_indices = actual_pv.index.intersection(total_df.index)
                             
-                            if common_indices.any():
+                            if len(common_indices) > 0:
                                 total_dfs[model_name].loc[common_indices, 'Measured & upscaled'] = actual_pv.loc[common_indices, 'realTime']
                                 total_dfs[model_name].loc[common_indices, 'Most recent forecast'] = actual_pv.loc[common_indices, 'mostRecentForecast']
                                 total_dfs[model_name].loc[common_indices, 'Week ahead forecast'] = actual_pv.loc[common_indices, 'weekAheadForecast']
@@ -1638,7 +1638,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 def main():
     st.sidebar.title("Navigation")
     
