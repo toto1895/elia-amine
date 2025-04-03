@@ -1215,10 +1215,11 @@ def solar_view():
         for i, model in enumerate(models):
             progress_text.text(f"Loading {model} forecast...")
             result = load_solar_forecast_model(model, selected_date)
+            print(result)
             if result is not None:
                 # Filter model data to match the selected date range
-                result = result[(result.index >= selected_date_utc) & 
-                               (result.index < selected_date_end)]
+                #result = result[(result.index >= selected_date_utc) & 
+                 #              (result.index < selected_date_end)]
                 forecasts[model] = result
             progress_bar.progress((i + 1) / len(models))
         
