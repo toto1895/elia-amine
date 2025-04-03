@@ -1080,8 +1080,17 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-
-def solar_view():
+# Add week ahead forecast if available
+        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Week ahead forecast'],
+                    name=f"Week Ahead Forecast (Elia)",
+                    mode='lines',
+                    line=dict(color=metric_colors['Week ahead forecast'], dash='dot')
+                )
+            )def solar_view():
     """Display solar forecasts grouped by region with optimized groupby operations."""
     import datetime
     
@@ -1265,36 +1274,45 @@ def solar_view():
         # Fetch actual measured data from Elia
         with st.spinner("Fetching actual measured PV data from Elia..."):
             try:
-                latest_pv = pd.read_csv('https://opendata.elia.be/api/explore/v2.1/catalog/datasets/ods087/exports/csv?lang=fr&timezone=Europe%2FBrussels&use_labels=true&delimiter=%3B',
-                                       sep=';')
-                latest_pv = latest_pv[['Datetime','Region','Monitored capacity',
-                                      'Measured & upscaled','Day Ahead 11AM forecast',
-                                      'Most recent forecast']]
-                latest_pv['Datetime'] = pd.to_datetime(latest_pv['Datetime'], utc=True)
+                # Using the new API endpoint with direct JSON response
+                api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_utc.strftime("%Y-%m-%d")}&sourceID=1'
                 
-                # Filter to match our date range
-                latest_pv = latest_pv[(latest_pv['Datetime'] >= selected_date_utc) & 
-                                     (latest_pv['Datetime'] <= selected_date_end)]
+                st.info(f"Fetching solar data from: {api_url}")
                 
-                # Group by Datetime and sum across regions
-                actual_pv = latest_pv.groupby('Datetime').agg({
-                    'Monitored capacity': 'sum',
-                    'Measured & upscaled': 'sum',
-                    'Day Ahead 11AM forecast': 'sum',
-                    'Most recent forecast': 'sum'
-                })
+                # Read the JSON data directly instead of CSV
+                import requests
                 
-                # Keep only data points that match our total_df index
-                common_indices = actual_pv.index.intersection(total_df.index)
-                actual_pv = actual_pv.loc[common_indices]
-                
-                if not actual_pv.empty:
-                    st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
-                    # Add actual measured data to the total_df
-                    total_df.loc[common_indices, 'Measured & upscaled'] = actual_pv['Measured & upscaled']
-                    total_df.loc[common_indices, 'Most recent forecast'] = actual_pv['Most recent forecast']
+                response = requests.get(api_url)
+                if response.status_code == 200:
+                    solar_data = response.json()
+                    
+                    # Convert the JSON data to a pandas DataFrame
+                    actual_pv = pd.DataFrame(solar_data)
+                    
+                    # Convert timestamp string to datetime
+                    actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
+                    actual_pv = actual_pv.set_index('Datetime')
+                    
+                    # Filter to match our date range
+                    actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
+                                         (actual_pv.index <= selected_date_end)]
+                    
+                    # Keep only data points that match our total_df index
+                    common_indices = actual_pv.index.intersection(total_df.index)
+                    actual_pv = actual_pv.loc[common_indices]
+                    
+                    if not actual_pv.empty:
+                        st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
+                        # Add actual measured data to the total_df
+                        total_df.loc[common_indices, 'Measured & upscaled'] = actual_pv['realTime']
+                        total_df.loc[common_indices, 'Most recent forecast'] = actual_pv['mostRecentForecast']
+                        
+                        # Add week ahead forecast as well (new data column)
+                        total_df.loc[common_indices, 'Week ahead forecast'] = actual_pv['weekAheadForecast']
+                    else:
+                        st.warning("No matching actual measurement data found for the selected date range")
                 else:
-                    st.warning("No matching actual measurement data found for the selected date range")
+                    st.error(f"Failed to fetch data: {response.status_code} - {response.text}")
             except Exception as e:
                 st.error(f"Error fetching actual data: {str(e)}")
                 import traceback
@@ -1310,7 +1328,8 @@ def solar_view():
             'rec_0.2': 'lightblue',
             'rec_0.8': 'darkblue',
             'Measured & upscaled': 'green',
-            'Most recent forecast': 'red'
+            'Most recent forecast': 'red',
+            'Week ahead forecast': 'purple'
         }
         
         # Add traces for total forecast with uncertainty bands
@@ -1430,8 +1449,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
-
 
 def main():
     st.sidebar.title("Navigation")
