@@ -1081,7 +1081,7 @@ def run_forecast_job():
         st.error(traceback.format_exc())
 
 def solar_view():
-    """Display solar forecasts grouped by region with optimized groupby operations and forecast scoring."""
+    """Display solar forecasts for all models with optimized groupby operations and forecast scoring."""
     import datetime
     import requests
     import numpy as np
@@ -1236,93 +1236,75 @@ def solar_view():
                 # Calculate metrics
                 mae = np.mean(np.abs(score_df[actual_column] - score_df[forecast]))
                 rmse = np.sqrt(np.mean(np.square(score_df[actual_column] - score_df[forecast])))
-                #mape = np.mean(np.abs((score_df[actual_column] - score_df[forecast]) / score_df[actual_column])) * 100
                 bias = np.mean(score_df[forecast] - score_df[actual_column])
-                
-                # Calculate R-squared
-               # corr = np.corrcoef(score_df[actual_column], score_df[forecast])[0, 1]
-               # r_squared = corr ** 2
                 
                 results.append({
                     'Forecast': forecast,
                     'MAE (MW)': mae,
                     'RMSE (MW)': rmse,
-                    #'MAPE (%)': mape,
                     'Bias (MW)': bias,
-                    #'R-squared': r_squared,
-                    #'Data Points': len(score_df)
                 })
             
             # Convert to DataFrame and sort by RMSE
             results_df = pd.DataFrame(results).sort_values('RMSE (MW)')
             return results_df
-        
-        # Model selection
+
+        # Define all available models
         available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless']
-        model_name = st.selectbox("Select model", options=available_models, index=0)
         
-        # Load solar forecast data
-        with st.spinner(f"Loading {model_name} solar forecast data..."):
-            df = load_solar_forecast_data(model_name, selected_date)
+        # Load data for all models and store them in a dictionary
+        model_data = {}
+        total_dfs = {}
         
-        if df is None:
-            st.error("No forecast data available for the selected date")
+        for model_name in available_models:
+            with st.spinner(f"Loading {model_name} solar forecast data..."):
+                df = load_solar_forecast_data(model_name, selected_date)
+                
+                if df is not None:
+                    # Filter data to match the selected date range
+                    df = df[(df.index >= selected_date_utc) & (df.index <= selected_date_end)]
+                    
+                    if not df.empty:
+                        model_data[model_name] = df
+                        
+                        # Create a copy to avoid SettingWithCopyWarning
+                        df_plot = df.copy()
+                        
+                        # Add Model column for better tracking
+                        df_plot['Model'] = model_name
+                        
+                        # Metrics to be aggregated
+                        metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
+                        
+                        # Use pandas groupby directly - much more efficient
+                        regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
+                            metric: 'sum' for metric in metrics
+                        }).reset_index()
+                        
+                        # Rename the datetime index column
+                        regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
+                        
+                        # Add Model column back
+                        regional_df['Model'] = model_name
+                        
+                        if not regional_df.empty:
+                            # Group by datetime only and sum all regions together
+                            total_df = regional_df.groupby('Datetime').agg({
+                                'Day Ahead 11AM forecast': 'sum',
+                                'rec': 'sum',
+                                'rec_0.2': 'sum',
+                                'rec_0.8': 'sum'
+                            }).reset_index().set_index('Datetime')
+                            
+                            total_df = total_df.resample('15min').interpolate().iloc[:96]
+                            total_dfs[model_name] = total_df
+        
+        if not total_dfs:
+            st.error("No forecast data available for any model")
             return
-        
-        # Filter data to match the selected date range
-        df = df[(df.index >= selected_date_utc) & (df.index <= selected_date_end)]
-        
-        if df.empty:
-            st.error("No forecast data available within the selected date range")
-            return
-        
-        # Group by region and sum the values - OPTIMIZED VERSION
-        st.write("Grouping data by region...")
-        
-        # Create a copy to avoid SettingWithCopyWarning
-        df_plot = df.copy()
-        model_display_name = model_name
-        
-        # Add Model column for better tracking
-        df_plot['Model'] = model_display_name
-        
-        # Metrics to be aggregated
-        metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
-        
-        # Use pandas groupby directly - much more efficient
-        regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
-            metric: 'sum' for metric in metrics
-        }).reset_index()
-        
-        # Rename the datetime index column
-        regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
-        
-        # Add Model column back
-        regional_df['Model'] = model_display_name
-        
-        if regional_df.empty:
-            st.error("Failed to group data by region")
-            return
-            
-        # Create pivot table for easier plotting
-        # Using stack/unstack is much more efficient than manual iteration
-        pivot_df = regional_df.set_index(['Datetime', 'Region'])[metrics].unstack('Region')
-        
-        # Display summary information
-        regions = regional_df['Region'].unique()
-        st.write(f"Found {len(regions)} regions: {', '.join(regions)}")
-        
-        # Now instead of selecting regions, we'll sum all regions to get a total
-        # Group by datetime only and sum all regions together
-        total_df = regional_df.groupby('Datetime').agg({
-            'Day Ahead 11AM forecast': 'sum',
-            'rec': 'sum',
-            'rec_0.2': 'sum',
-            'rec_0.8': 'sum'
-        }).reset_index().set_index('Datetime')
-        total_df = total_df.resample('15min').interpolate().iloc[:96]
         
         # Fetch actual measured data from Elia
+        actual_data = None
         with st.spinner("Fetching actual measured PV data from Elia..."):
             try:
                 # Using the new API endpoint with direct JSON response
@@ -1346,18 +1328,19 @@ def solar_view():
                     actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
                                          (actual_pv.index <= selected_date_end)]
                     
-                    # Keep only data points that match our total_df index
-                    common_indices = actual_pv.index.intersection(total_df.index)
-                    actual_pv = actual_pv.loc[common_indices]
-                    
                     if not actual_pv.empty:
                         st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
-                        # Add actual measured data to the total_df
-                        total_df.loc[common_indices, 'Measured & upscaled'] = actual_pv['realTime']
-                        total_df.loc[common_indices, 'Most recent forecast'] = actual_pv['mostRecentForecast']
+                        actual_data = actual_pv
                         
-                        # Add week ahead forecast as well (new data column)
-                        total_df.loc[common_indices, 'Week ahead forecast'] = actual_pv['weekAheadForecast']
+                        # Add actual data to each model's total_df
+                        for model_name, total_df in total_dfs.items():
+                            # Keep only data points that match our total_df index
+                            common_indices = actual_pv.index.intersection(total_df.index)
+                            
+                            if common_indices.any():
+                                total_dfs[model_name].loc[common_indices, 'Measured & upscaled'] = actual_pv.loc[common_indices, 'realTime']
+                                total_dfs[model_name].loc[common_indices, 'Most recent forecast'] = actual_pv.loc[common_indices, 'mostRecentForecast']
+                                total_dfs[model_name].loc[common_indices, 'Week ahead forecast'] = actual_pv.loc[common_indices, 'weekAheadForecast']
                     else:
                         st.warning("No matching actual measurement data found for the selected date range")
                 else:
@@ -1366,86 +1349,83 @@ def solar_view():
                 st.error(f"Error fetching actual data: {str(e)}")
                 import traceback
                 st.error(traceback.format_exc())
-            
-        # Create figure
+        
+        # Create combined dataframe with data from all models
+        combined_df = pd.DataFrame()
+        
+        for model_name, total_df in total_dfs.items():
+            if combined_df.empty:
+                combined_df = total_df.copy()
+                # Rename columns to include model name
+                combined_df.rename(columns={
+                    'Day Ahead 11AM forecast': f'Day Ahead 11AM forecast ({model_name})',
+                    'rec': f'p50 ({model_name})',
+                    'rec_0.2': f'rec_0.2 ({model_name})',
+                    'rec_0.8': f'rec_0.8 ({model_name})'
+                }, inplace=True)
+            else:
+                # Add columns from this model
+                combined_df[f'Day Ahead 11AM forecast ({model_name})'] = total_df['Day Ahead 11AM forecast']
+                combined_df[f'p50 ({model_name})'] = total_df['rec']
+                combined_df[f'rec_0.2 ({model_name})'] = total_df['rec_0.2']
+                combined_df[f'rec_0.8 ({model_name})'] = total_df['rec_0.8']
+        
+        # Add the actual measurements (should be the same for all models)
+        if actual_data is not None:
+            for col in ['Measured & upscaled', 'Most recent forecast', 'Week ahead forecast']:
+                if col in next(iter(total_dfs.values())):
+                    combined_df[col] = next(iter(total_dfs.values()))[col]
+        
+        # Create figure for combined plot
         fig = go.Figure()
         
-        # Define colors for different metrics
-        metric_colors = {
-            'Day Ahead 11AM forecast': 'orange',
-            'rec': 'green',
-            'rec_0.2': 'green',
-            'rec_0.8': 'green',
-            'Measured & upscaled': 'white',
-            'Most recent forecast': 'yellow',
-            'Week ahead forecast': 'purple'
+        # Define colors for different models
+        model_colors = {
+            'meteofrance_seamless': 'green',
+            'dmi_seamless': 'blue',
+            'icon_d2': 'red',
+            'metno_seamless': 'orange'
         }
         
-        # Add traces for total forecast with uncertainty bands
-        # Add forecast - Day Ahead
+        # Add traces for each model's p50 forecast
+        for model_name in total_dfs.keys():
+            fig.add_trace(
+                go.Scatter(
+                    x=combined_df.index,
+                    y=combined_df[f'p50 ({model_name})'],
+                    name=f"p50 ({model_name})",
+                    mode='lines',
+                    line_color=model_colors.get(model_name, 'gray')
+                )
+            )
+        
+        # Add ELIA Day Ahead 11AM forecast from the first model
+        first_model = list(total_dfs.keys())[0]
         fig.add_trace(
             go.Scatter(
-                x=total_df.index,
-                y=total_df['Day Ahead 11AM forecast'],
+                x=combined_df.index,
+                y=combined_df[f'Day Ahead 11AM forecast ({first_model})'],
                 name=f"ELIA DA 11AM",
                 mode='lines',
-                line_color=metric_colors['Day Ahead 11AM forecast']
-            )
-        )
-        
-        # Add uncertainty band (rec_0.2 - rec_0.8)
-        fig.add_trace(
-            go.Scatter(
-                x=total_df.index,
-                y=total_df['rec_0.8'],
-                name=f"Upper bound ({model_display_name})",
-                mode='lines',
-                line_color='rgba(0,0,0,0)',
-                showlegend=False
-            )
-        )
-        
-        fig.add_trace(
-            go.Scatter(
-                x=total_df.index,
-                y=total_df['rec_0.2'],
-                name=f"Uncertainty ({model_display_name})",
-                mode='lines',
-                fill='tonexty',
-                fillcolor=f'rgba(0, 0, 255, 0.2)',
-                line_color='rgba(0,0,0,0)',
-                showlegend=True
-            )
-        )
-        
-        # Add rec forecast
-        fig.add_trace(
-            go.Scatter(
-                x=total_df.index,
-                y=total_df['rec'],
-                name=f"p50 ({model_display_name})",
-                mode='lines',
-                line_color=metric_colors['rec']
+                line_color='purple'
             )
         )
         
         # Add actual measured data if available
-        if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
+        if 'Measured & upscaled' in combined_df.columns and not combined_df['Measured & upscaled'].isna().all():
             fig.add_trace(
                 go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Measured & upscaled'],
+                    x=combined_df.index,
+                    y=combined_df['Measured & upscaled'],
                     name=f"Actual Measured & Upscaled",
                     mode='lines',
-                    line_color=metric_colors['Measured & upscaled'],
-                    marker=dict(size=8)
+                    line_color='white',
+                    line_width=2
                 )
             )
         
-        # Add most recent forecast if available
-       
         # Update layout with dynamic y-axis range
-        max_y_value = total_df.max().max()
+        max_y_value = combined_df.max().max()
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
         
         fig.update_layout(
@@ -1454,20 +1434,104 @@ def solar_view():
             yaxis=dict(range=[0, y_max]),
             template="plotly_dark",
             height=600,
-            title=f"Total Solar Forecast - {model_display_name} - {selected_date}",
+            title=f"Total Solar Forecast - All Models - {selected_date}",
             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
         )
         
         st.plotly_chart(fig, use_container_width=True)
         
+        # Create individual plots for each model
+        for model_name, total_df in total_dfs.items():
+            model_fig = go.Figure()
+            
+            # Add traces for this model with uncertainty bands
+            # Add Day Ahead forecast
+            model_fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Day Ahead 11AM forecast'],
+                    name=f"ELIA DA 11AM",
+                    mode='lines',
+                    line_color='purple'
+                )
+            )
+            
+            # Add uncertainty band (rec_0.2 - rec_0.8)
+            model_fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['rec_0.8'],
+                    name=f"Upper bound",
+                    mode='lines',
+                    line_color='rgba(0,0,0,0)',
+                    showlegend=False
+                )
+            )
+            
+            model_fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['rec_0.2'],
+                    name=f"Uncertainty",
+                    mode='lines',
+                    fill='tonexty',
+                    fillcolor=f'rgba(0, 0, 255, 0.2)',
+                    line_color='rgba(0,0,0,0)',
+                    showlegend=True
+                )
+            )
+            
+            # Add rec forecast
+            model_fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['rec'],
+                    name=f"p50",
+                    mode='lines',
+                    line_color=model_colors.get(model_name, 'green')
+                )
+            )
+            
+            # Add actual measured data if available
+            if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
+                model_fig.add_trace(
+                    go.Scatter(
+                        x=total_df.index,
+                        y=total_df['Measured & upscaled'],
+                        name=f"Actual Measured & Upscaled",
+                        mode='lines',
+                        line_color='white',
+                        line_width=2
+                    )
+                )
+            
+            # Update layout
+            model_fig.update_layout(
+                xaxis_title="Time",
+                yaxis_title="MW",
+                yaxis=dict(range=[0, y_max]),
+                template="plotly_dark",
+                height=500,
+                title=f"Solar Forecast - {model_name} - {selected_date}",
+                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+            )
+            
+            st.plotly_chart(model_fig, use_container_width=True)
+        
         # Calculate and display forecast scoring if actual measurements are available
-        if 'Measured & upscaled' in total_df.columns and not total_df['Measured & upscaled'].isna().all():
+        if actual_data is not None:
             st.subheader("Forecast Scoring")
             
             with st.spinner("Calculating forecast scores..."):
-                scores_df = calculate_forecast_scores(total_df.rename(columns={'rec':'p50',
-                                                                               'Day Ahead 11AM forecast':'ELIA DA 11AM'}
-                                                                               ).drop(columns='Most recent forecast'))
+                # Prepare a DataFrame for scoring with data from all models
+                score_data = combined_df.copy()
+                
+                # Keep only forecast columns and actual data
+                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col]
+                score_data = score_data.drop(columns=exclude_cols)
+                
+                # Calculate scores
+                scores_df = calculate_forecast_scores(score_data)
                 
                 if scores_df is not None:
                     # Create a styled dataframe for better visualization
@@ -1519,16 +1583,17 @@ def solar_view():
                     
                     # Create a scatter plot of forecast vs actual for each model
                     fig_scatter = go.Figure()
+                    
                     for forecast in scores_df['Forecast']:
                         fig_scatter.add_trace(go.Scatter(
-                            x=total_df['Measured & upscaled'].dropna(),
-                            y=total_df[forecast].loc[total_df['Measured & upscaled'].dropna().index],
+                            x=combined_df['Measured & upscaled'].dropna(),
+                            y=combined_df[forecast].loc[combined_df['Measured & upscaled'].dropna().index],
                             mode='markers',
                             name=forecast
                         ))
                     
                     # Add perfect forecast line (y=x)
-                    max_val = max(total_df['Measured & upscaled'].max(), total_df[scores_df['Forecast'][0]].max())
+                    max_val = max(combined_df['Measured & upscaled'].max(), combined_df[scores_df['Forecast'][0]].max())
                     fig_scatter.add_trace(go.Scatter(
                         x=[0, max_val],
                         y=[0, max_val],
@@ -1556,27 +1621,16 @@ def solar_view():
                         mime="text/csv",
                     )
         
-        # Show both data tables
-        with st.expander("View Regional Data"):
-            st.dataframe(regional_df)
-            
-        with st.expander("View Total Data"):
-            st.dataframe(total_df)
+        # Show combined data table
+        with st.expander("View Combined Data"):
+            st.dataframe(combined_df)
         
-        # Add download buttons for both data types
-        regional_csv = regional_df.to_csv().encode('utf-8')
+        # Add download button for combined data
+        combined_csv = combined_df.to_csv().encode('utf-8')
         st.download_button(
-            label="Download Regional Solar Data as CSV",
-            data=regional_csv,
-            file_name=f"solar_forecasts_by_region_{selected_date}.csv",
-            mime="text/csv",
-        )
-        
-        total_csv = total_df.to_csv().encode('utf-8')
-        st.download_button(
-            label="Download Total Solar Data as CSV",
-            data=total_csv,
-            file_name=f"solar_forecasts_total_{selected_date}.csv",
+            label="Download Combined Solar Data as CSV",
+            data=combined_csv,
+            file_name=f"solar_forecasts_all_models_{selected_date}.csv",
             mime="text/csv",
         )
         
@@ -1584,7 +1638,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
