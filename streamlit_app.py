@@ -1081,7 +1081,7 @@ def run_forecast_job():
         st.error(traceback.format_exc())
 
 def solar_view():
-    """Display solar forecasts grouped by region."""
+    """Display solar forecasts grouped by region with optimized groupby operations."""
     import datetime
     
     st.subheader("Solar View")
@@ -1097,7 +1097,7 @@ def solar_view():
             time.sleep(1)
         
         # Convert selected date to datetime with UTC timezone for consistent comparison
-        selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC')+ pd.Timedelta(days=1)
+        selected_date_utc = pd.Timestamp(selected_date).tz_localize('UTC') + pd.Timedelta(days=1)
         selected_date_end = selected_date_utc + pd.Timedelta(days=2)
         
         # Function to load and process solar forecast data
@@ -1163,11 +1163,6 @@ def solar_view():
                     st.warning(f"Empty DataFrame for model: {model_name}")
                     return None
                 
-                # Ensure we have the expected columns
-                expected_columns = ['Datetime', '0.05', '0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '0.95', 
-                                   'Region', 'Monitored capacity', 'Measured & upscaled', 
-                                   'Day Ahead 11AM forecast', 'Most recent forecast', 'rec', 'rec_0.2', 'rec_0.8']
-                
                 # Check for minimal required columns for plotting
                 required_cols = ['Region', 'Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
                 missing_cols = [col for col in required_cols if col not in df.columns]
@@ -1215,47 +1210,43 @@ def solar_view():
             return
         
         # Filter data to match the selected date range
-        df = df[(df.index >= selected_date_utc)&(df.index <= selected_date_end)]
+        df = df[(df.index >= selected_date_utc) & (df.index <= selected_date_end)]
         
         if df.empty:
             st.error("No forecast data available within the selected date range")
             return
         
-        # Group by region and sum the values
+        # Group by region and sum the values - OPTIMIZED VERSION
         st.write("Grouping data by region...")
         
-        # Ensure 'Region' column exists and create a copy to avoid SettingWithCopyWarning
+        # Create a copy to avoid SettingWithCopyWarning
         df_plot = df.copy()
-        
-        # Create a copy of model name for displaying in plots
         model_display_name = model_name
         
-        # First create a DataFrame with MultiIndex (datetime, region)
-        grouped_data = []
-        for timestamp, group in df_plot.groupby(df_plot.index):
-            for region, region_group in group.groupby('Region'):
-                # Sum metrics for each region at each timestamp
-                row_data = {
-                    'Datetime': timestamp,
-                    'Region': region,
-                    'Model': model_display_name,
-                    'Day Ahead 11AM forecast': region_group['Day Ahead 11AM forecast'].sum(),
-                    'rec': region_group['rec'].sum(),
-                    'rec_0.2': region_group['rec_0.2'].sum(),
-                    'rec_0.8': region_group['rec_0.8'].sum()
-                }
-                grouped_data.append(row_data)
+        # Add Model column for better tracking
+        df_plot['Model'] = model_display_name
         
-        if not grouped_data:
+        # Metrics to be aggregated
+        metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
+        
+        # Use pandas groupby directly - much more efficient
+        regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
+            metric: 'sum' for metric in metrics
+        }).reset_index()
+        
+        # Rename the datetime index column
+        regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
+        
+        # Add Model column back
+        regional_df['Model'] = model_display_name
+        
+        if regional_df.empty:
             st.error("Failed to group data by region")
             return
             
-        # Convert to DataFrame
-        regional_df = pd.DataFrame(grouped_data)
-        
-        # Convert to pivot table for easier plotting - include Model in the columns
-        pivot_df = regional_df.pivot(index='Datetime', columns=['Region'], 
-                                    values=['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8'])
+        # Create pivot table for easier plotting
+        # Using stack/unstack is much more efficient than manual iteration
+        pivot_df = regional_df.set_index(['Datetime', 'Region'])[metrics].unstack('Region')
         
         # Display summary information
         regions = regional_df['Region'].unique()
@@ -1263,8 +1254,8 @@ def solar_view():
         
         # Let user select which regions to display
         selected_regions = st.multiselect("Select regions to display", 
-                                          options=regions, 
-                                          default=regions[:min(3, len(regions))])
+                                         options=regions, 
+                                         default=regions[:min(3, len(regions))])
         
         if not selected_regions:
             st.warning("Please select at least one region to display")
@@ -1367,7 +1358,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 def main():
     st.sidebar.title("Navigation")
     
