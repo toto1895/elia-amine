@@ -1236,21 +1236,21 @@ def solar_view():
                 # Calculate metrics
                 mae = np.mean(np.abs(score_df[actual_column] - score_df[forecast]))
                 rmse = np.sqrt(np.mean(np.square(score_df[actual_column] - score_df[forecast])))
-                mape = np.mean(np.abs((score_df[actual_column] - score_df[forecast]) / score_df[actual_column])) * 100
+                #mape = np.mean(np.abs((score_df[actual_column] - score_df[forecast]) / score_df[actual_column])) * 100
                 bias = np.mean(score_df[forecast] - score_df[actual_column])
                 
                 # Calculate R-squared
-                corr = np.corrcoef(score_df[actual_column], score_df[forecast])[0, 1]
-                r_squared = corr ** 2
+               # corr = np.corrcoef(score_df[actual_column], score_df[forecast])[0, 1]
+               # r_squared = corr ** 2
                 
                 results.append({
                     'Forecast': forecast,
                     'MAE (MW)': mae,
                     'RMSE (MW)': rmse,
-                    'MAPE (%)': mape,
+                    #'MAPE (%)': mape,
                     'Bias (MW)': bias,
-                    'R-squared': r_squared,
-                    'Data Points': len(score_df)
+                    #'R-squared': r_squared,
+                    #'Data Points': len(score_df)
                 })
             
             # Convert to DataFrame and sort by RMSE
