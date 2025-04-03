@@ -1501,7 +1501,7 @@ def solar_view():
                     
                     fig_scores.update_layout(
                         title='error profile ',
-                        xaxis_title='Forecast Model',
+                        xaxis_title='',
                         yaxis_title='error (MW)',
                         template='plotly_dark',
                         height=400
