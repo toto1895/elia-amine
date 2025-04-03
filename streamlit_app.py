@@ -1080,19 +1080,10 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
-# Add week ahead forecast if available
-        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
-            fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Week ahead forecast'],
-                    name=f"Week Ahead Forecast (Elia)",
-                    mode='lines',
-                    line=dict(color=metric_colors['Week ahead forecast'], dash='dot')
-                )
-            )def solar_view():
+def solar_view():
     """Display solar forecasts grouped by region with optimized groupby operations."""
     import datetime
+    import requests
     
     st.subheader("Solar View")
 
@@ -1280,8 +1271,6 @@ def run_forecast_job():
                 st.info(f"Fetching solar data from: {api_url}")
                 
                 # Read the JSON data directly instead of CSV
-                import requests
-                
                 response = requests.get(api_url)
                 if response.status_code == 200:
                     solar_data = response.json()
@@ -1402,6 +1391,18 @@ def run_forecast_job():
                     name=f"Most Recent Forecast (Elia)",
                     mode='lines',
                     line=dict(color=metric_colors['Most recent forecast'], dash='dash')
+                )
+            )
+            
+        # Add week ahead forecast if available
+        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
+            fig.add_trace(
+                go.Scatter(
+                    x=total_df.index,
+                    y=total_df['Week ahead forecast'],
+                    name=f"Week Ahead Forecast (Elia)",
+                    mode='lines',
+                    line=dict(color=metric_colors['Week ahead forecast'], dash='dot')
                 )
             )
         
