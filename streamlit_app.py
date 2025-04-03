@@ -1443,29 +1443,7 @@ def solar_view():
             )
         
         # Add most recent forecast if available
-        if 'Most recent forecast' in total_df.columns and not total_df['Most recent forecast'].isna().all():
-            fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Most recent forecast'],
-                    name=f"ELIA Most Recent Forecast",
-                    mode='lines',
-                    line_color=metric_colors['Most recent forecast']
-                )
-            )
-            
-        # Add week ahead forecast if available
-        if 'Week ahead forecast' in total_df.columns and not total_df['Week ahead forecast'].isna().all():
-            fig.add_trace(
-                go.Scatter(
-                    x=total_df.index,
-                    y=total_df['Week ahead forecast'],
-                    name=f"ELIA Week Ahead Forecast",
-                    mode='lines',
-                    line_color=metric_colors['Week ahead forecast']
-                )
-            )
-        
+       
         # Update layout with dynamic y-axis range
         max_y_value = total_df.max().max()
         y_max = max_y_value * 1.1 if max_y_value > 0 else 100
@@ -1487,7 +1465,9 @@ def solar_view():
             st.subheader("Forecast Scoring")
             
             with st.spinner("Calculating forecast scores..."):
-                scores_df = calculate_forecast_scores(total_df)
+                scores_df = calculate_forecast_scores(total_df.rename(columns={'rec':'p50',
+                                                                               'Day Ahead 11AM forecast':'ELIA DA 11AM'}
+                                                                               ).drop(columns='Most recent forecast'))
                 
                 if scores_df is not None:
                     # Create a styled dataframe for better visualization
@@ -1608,7 +1588,7 @@ def solar_view():
         import traceback
         st.error(traceback.format_exc())
 
-        
+
 def main():
     st.sidebar.title("Navigation")
     
