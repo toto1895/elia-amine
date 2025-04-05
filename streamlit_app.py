@@ -1468,7 +1468,7 @@ def solar_view():
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
                 score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 250
                 
-                score_data[score_data<10] = 0
+                score_data[score_data<10] = 0.0
                 
                 # Keep only forecast columns and actual data
                 exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
