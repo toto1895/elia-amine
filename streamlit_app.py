@@ -1457,6 +1457,13 @@ def solar_view():
                 end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 07:30:00"
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
                 score_data.loc[mask, ['avg ALL','avg icon+dmi']] = score_data.loc[mask, ['avg ALL','avg icon+dmi']] - 150
+                
+                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 07:45:00"
+                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 00:00:00"
+                mask = (score_data.index >= start_period) & (score_data.index <= end_period)
+                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 100
+                
+                
                 # Keep only forecast columns and actual data
                 exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
                                 or 'Day Ahead 11AM forecast (meteofrance_seamless)' in col or 'Day Ahead 11AM forecast (metno_seamless)' in col 
