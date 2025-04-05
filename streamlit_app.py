@@ -1462,6 +1462,11 @@ def solar_view():
                 end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 09:00:00"
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
                 score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 100
+
+                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 12:00:00"
+                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 15:00:00"
+                mask = (score_data.index >= start_period) & (score_data.index <= end_period)
+                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 200
                 
                 
                 # Keep only forecast columns and actual data
