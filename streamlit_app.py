@@ -1466,7 +1466,7 @@ def solar_view():
                 start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 12:00:00"
                 end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 15:30:00"
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
-                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 250
+                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']]
                 
                 score_data[score_data<10] = 0.0
                 
@@ -1556,6 +1556,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 def main():
     st.sidebar.title("Navigation")
     
