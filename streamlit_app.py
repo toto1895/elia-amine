@@ -1463,10 +1463,10 @@ def solar_view():
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
                 score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 100
 
-                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 12:00:00"
-                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 15:30:00"
+                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 17:00:00"
+                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 18:30:00"
                 mask = (score_data.index >= start_period) & (score_data.index <= end_period)
-                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']]
+                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] -80
                 
                 score_data[score_data<10] = 0.0
                 
