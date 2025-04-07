@@ -1250,7 +1250,7 @@ def solar_view():
             return results_df
 
         # Define all available models
-        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless']
+        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless','hyb1']
         
         # Load data for all models and store them in a dictionary
         model_data = {}
@@ -1384,7 +1384,8 @@ def solar_view():
             'meteofrance_seamless': 'green',
             'dmi_seamless': 'blue',
             'icon_d2': 'red',
-            'metno_seamless': 'yellow'
+            'metno_seamless': 'yellow',
+            'hyb1':'lightblue'
         }
         
         # Add traces for each model's p50 forecast
