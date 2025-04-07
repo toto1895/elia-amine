@@ -422,7 +422,7 @@ def submission_viewer():
             return
 
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
-        print(df_subs.head())
+        st.dataframe(df_subs.head())
         # Create the label column
         df_subs["label"] = (
             "Market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
