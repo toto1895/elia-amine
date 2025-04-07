@@ -66,6 +66,7 @@ def list_submissions(_api):
         df_subs = df_subs.sort_values("registered_at", ascending=False)
         df_subs["registered_at"] = df_subs["registered_at"].dt.round("T")
         df_subs = df_subs.drop_duplicates(subset=["registered_at"], keep="first")
+
         return df_subs
     except Exception as e:
         st.error(f"Error listing submissions: {e}")
@@ -420,9 +421,8 @@ def submission_viewer():
             st.error("No submissions found. Please check your credentials and connection.")
             return
 
-        print(df_subs)
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
-        
+        print(df_subs.head())
         # Create the label column
         df_subs["label"] = (
             "Market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
