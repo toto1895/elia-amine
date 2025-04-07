@@ -420,6 +420,7 @@ def submission_viewer():
             st.error("No submissions found. Please check your credentials and connection.")
             return
 
+        print(df_subs)
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
         
         # Create the label column
