@@ -597,7 +597,7 @@ def submission_viewer():
                 )
             
             # Add solar actuals from the model
-            if "actual elia" in data_slice.columns:
+            if "realTime" in data_slice.columns:
                 fig.add_trace(
                     go.Scatter(
                         x=data_slice.index,
