@@ -592,7 +592,7 @@ def submission_viewer():
                         y=data_slice["q50"],
                         name="Solar q50 Forecast",
                         mode="lines",
-                        line_color="rgb(255, 165, 0)"  # Orange for solar forecast
+                        line_color="lightblue"  # Orange for solar forecast
                     )
                 )
             
@@ -604,7 +604,7 @@ def submission_viewer():
                         y=data_slice["actual elia"],
                         name="Model Solar Actual",
                         mode="lines",
-                        line_color="yellow"
+                        line_color="white"
                     )
                 )
                 
@@ -618,9 +618,9 @@ def submission_viewer():
                         go.Scatter(
                             x=actual_data.index,
                             y=actual_data[value_col],
-                            name="Elia PV Actual",
+                            name="Elia DA 11AM",
                             mode="lines",
-                            line_color="green",
+                            line_color="darkorange",
                             line_width=2
                         )
                     )
@@ -663,7 +663,7 @@ def submission_viewer():
                         y=data_slice["q50"],
                         name="Wind q50 Forecast",
                         mode="lines",
-                        line_color="rgb(5, 222, 255)"  # Blue for wind forecast
+                        line_color="lightblue"  # Blue for wind forecast
                     )
                 )
 
@@ -675,7 +675,7 @@ def submission_viewer():
                         y=data_slice["DA elia (11AM)"],
                         name="Elia DA Wind Forecast",
                         mode="lines",
-                        line_color="skyblue"
+                        line_color="darkorange"
                     )
                 )
                 
@@ -725,7 +725,7 @@ def submission_viewer():
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-        
+
 from google.cloud import storage
 
 def list_blobs_in_bucket(bucket_name, prefix=None):
