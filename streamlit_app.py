@@ -601,8 +601,8 @@ def submission_viewer():
                 fig.add_trace(
                     go.Scatter(
                         x=data_slice.index,
-                        y=data_slice["actual elia"],
-                        name="Model Solar Actual",
+                        y=data_slice["realTime"],
+                        name="Solar Actual",
                         mode="lines",
                         line_color="white"
                     )
