@@ -429,9 +429,7 @@ def submission_viewer():
         if df_subs.empty:
             st.error("No submissions found. Please check your credentials and connection.")
             return
-        
-        # Filter submissions by selected resource type
-        
+
 
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
         # Create the label column
