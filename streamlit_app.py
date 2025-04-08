@@ -410,12 +410,18 @@ def submission_viewer():
     st.subheader("Submission Viewer")
 
     try:
-        # Fetch market sessions first
+        # Set up headers with the provided Bearer token
+        headers = {
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A"
+        }
+        
+        # Fetch market sessions using authentication
         with st.spinner("Fetching market sessions..."):
             try:
                 import requests
+                
                 session_url = "https://predico-elia.inesctec.pt/api/v1/market/session/?status=finished"
-                response = requests.get(session_url)
+                response = requests.get(session_url, headers=headers)
                 
                 if response.status_code == 200:
                     market_sessions = response.json().get("data", [])
@@ -450,26 +456,29 @@ def submission_viewer():
                     # Resource selector (radio button)
                     resource_type = st.radio("Select Resource Type:", ["Solar", "Wind"], horizontal=True)
                     
-                    # Now you can continue with the rest of the function
-                    # using session_id and resource_type as needed
+                    # Return the selected session_id and resource_type to be used by the rest of your code
+                    return session_id, resource_type
                     
+                elif response.status_code == 401:
+                    st.error("Authentication failed. The provided Bearer token may have expired or is invalid.")
+                    # Display the full response to help with debugging
+                    st.code(response.text)
+                    return None, None
                 else:
                     st.error(f"Failed to fetch market sessions: HTTP {response.status_code}")
-                    return
+                    st.code(response.text)
+                    return None, None
             except Exception as e:
                 st.error(f"Error fetching market sessions: {e}")
                 import traceback
                 st.error(traceback.format_exc())
-                return
+                return None, None
                 
-        # Here your original function would continue...
-        # This is where you'd use session_id to fetch submissions, etc.
-        
     except Exception as e:
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-
+        return None, None
 
 from google.cloud import storage
 
