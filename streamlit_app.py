@@ -426,11 +426,12 @@ def submission_viewer():
             st.error("No submissions found. Please check your credentials and connection.")
             return
 
+        st.dataframe(df_subs)
 
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
         # Create the label column
         df_subs["label"] = (
-            f"market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d %H:%M:%S"))
+            f"market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
             + " | ID: " + df_subs["id"].astype(str)
             + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
         )
