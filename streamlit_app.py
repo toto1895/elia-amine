@@ -707,7 +707,7 @@ def submission_viewer():
         fig.update_layout(
             xaxis_title="Datetime",
             yaxis_title=f"{resource_type} MW",
-            yaxis=dict(range=[0, 2300] if resource_type == "Wind" else [0, 1200]),  # Different y-axis range for Solar/Wind
+            yaxis=dict(range=[0, 2300] if resource_type == "Wind" else [0, 8000]),  # Different y-axis range for Solar/Wind
             template="plotly_dark",
             showlegend=True,
             title=f"{resource_type} Forecast and Actual Data",
