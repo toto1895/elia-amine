@@ -422,7 +422,6 @@ def submission_viewer():
             return
 
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
-        st.dataframe(df_subs.sort_values('registered_at',ascending=False).head())
         # Create the label column
         df_subs["label"] = (
             "Market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
@@ -431,6 +430,9 @@ def submission_viewer():
         )
         df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
         df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
+
+        st.dataframe(df_subs.sort_values('registered_at',ascending=False))
+
 
         selected_label = st.selectbox("Select submission", df_subs["label"])
 
