@@ -410,310 +410,66 @@ def submission_viewer():
     st.subheader("Submission Viewer")
 
     try:
-        # Resource selector (radio button)
-        resource_type = st.radio("Select Resource Type:", ["Solar", "Wind"], horizontal=True)
-        
-        # Set resource IDs based on selection
-
-        # Authenticate & get submissions
-        api = get_api()
-        if api is None:
-            st.error("Failed to authenticate API. Please try again.")
-            return
-            
-        df_subs = list_submissions(api)
-        if df_subs.empty:
-            st.error("No submissions found. Please check your credentials and connection.")
-            return
-
-        st.dataframe(df_subs)
-
-        df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
-        # Create the label column
-        df_subs["label"] = (
-            f"market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
-            + " | ID: " + df_subs["id"].astype(str)
-            + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
-        )
-        df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d %H:%M:%S"))
-        #df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
-
-        if df_subs.empty:
-            st.warning(f"No submissions available after filtering.")
-            return
-
-        selected_label = st.selectbox(f"Select ", df_subs["label"])
-
-        # Extract the row matching the chosen label
-        chosen_row = df_subs.loc[df_subs["label"] == selected_label].iloc[0]
-        submission_time = chosen_row["registered_at"]
-        challenge_id = chosen_row["market_session_challenge"]
-        
-        # Get the selected date for the market
-        selected_date = submission_time + pd.Timedelta(days=1)
-        selected_date_utc = selected_date.tz_convert('UTC').replace(hour=0, minute=0, second=0, microsecond=0)
-        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
-
-        # Fetch data for the chosen submission (scores + forecast)
-        scores, forecasts = fetch_submission_data(api, challenge_id, submission_time)
-
-        # Force the forecast index to be timezone-naive for consistent comparisons
-        if not forecasts.empty:
-            forecasts.index = forecasts.index.tz_localize(None)
-
-        # Display data
-        st.subheader(f"{resource_type} Scores for This Submission")
-        if scores.empty:
-            st.warning("No scoring data for this submission. Showing forecasts only.")
-        else:
-            st.dataframe(scores)
-
-        st.subheader(f"{resource_type} Forecast vs Actual")
-
-        if scores.empty and not forecasts.empty:
-            data_slice = forecasts
-            market_date = forecasts["q10"].dropna().index[0] if "q10" in forecasts.columns else None
-        elif not scores.empty:
-            market_date = scores["market_date"].iloc[0]
-            data_slice = forecasts
-        else:
-            st.error("No forecast or score data available")
-            return
-            
-        if forecasts.empty:
-            st.error("No forecast data available")
-            return
-            
-        data_slice = forecasts.dropna(subset='q10') if 'q10' in forecasts.columns else forecasts
-        
-        if 'q50' in data_slice.columns and 'DA elia (11AM)' in data_slice.columns and 'actual elia' in data_slice.columns:
-            df_sc = data_slice[['q50','DA elia (11AM)','actual elia']].copy().dropna()
-            
-            # Calculate metrics
-            myrmse = round(calculate_rmse(df_sc['q50'], df_sc['actual elia']),1)
-            eliarmse = round(calculate_rmse(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
-            mymase = round(calculate_mase(df_sc['q50'], df_sc['actual elia']),1)
-            eliamase = round(calculate_mase(df_sc['DA elia (11AM)'], df_sc['actual elia']),1)
-
-            # Display metrics
-            st.markdown(f"**RMSE (q50):** {myrmse} , MASE : {mymase}")
-            st.markdown(f"**RMSE (DA elia):** {eliarmse} , MASE : {eliamase}")
-        else:
-            st.warning("Missing columns needed for metrics calculation")
-
-        # Fetch actual solar data from Elia API if Solar is selected
-        actual_data = None
-        if resource_type == "Solar":
-            with st.spinner("Fetching actual measured PV data from Elia..."):
-                try:
-                    # Using the API endpoint with direct JSON response
-                    api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_utc.strftime("%Y-%m-%d")}&sourceID=1'
-                    
-                    st.info(f"Fetching solar data from: {api_url}")
-                    
-                    # Import requests for API call
-                    import requests
-                    
-                    # Read the JSON data directly
-                    response = requests.get(api_url)
-                    if response.status_code == 200:
-                        solar_data = response.json()
-                        
-                        # Convert the JSON data to a pandas DataFrame
-                        actual_pv = pd.DataFrame(solar_data)
-                        
-                        # Convert timestamp string to datetime
-                        actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
-                        actual_pv = actual_pv.set_index('Datetime')
-                        
-                        # Filter to match our date range
-                        actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
-                                             (actual_pv.index <= selected_date_end)]
-                        
-                        if not actual_pv.empty:
-                            st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
-                            actual_data = actual_pv
-                        else:
-                            st.warning("No actual solar data found for the selected date range")
-                    else:
-                        st.error(f"Failed to fetch solar data: {response.status_code} - {response.text}")
-                except Exception as e:
-                    st.error(f"Error fetching solar data: {e}")
-                    import traceback
-                    st.error(traceback.format_exc())
-
-        # Create visualization
-        fig = go.Figure()
-
-        # Different visualization based on resource type
-        if resource_type == "Solar":
-            # Add the uncertainty band (q10 - q90) for Solar
-            if "q90" in data_slice.columns and "q10" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q90"],
-                        name="q90",
-                        mode="lines",
-                        line_color="rgba(0,0,0,0)",
-                        showlegend=True
-                    )
-                )
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q10"],
-                        name="Solar Uncertainty [q10–q90]",
-                        mode="lines",
-                        fill="tonexty",
-                        fillcolor="rgba(255, 215, 0, 0.3)",  # Yellow-ish color for solar
-                        line_color="rgba(0,0,0,0)",
-                        showlegend=True
-                    )
-                )
-
-            # Add solar forecasts
-            if "q50" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q50"],
-                        name="Solar q50 Forecast",
-                        mode="lines",
-                        line_color="lightblue"  # Orange for solar forecast
-                    )
-                )
-            
-            # Add solar actuals from the model
-            if "realTime" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["realTime"],
-                        name="Solar Actual",
-                        mode="lines",
-                        line_color="white"
-                    )
-                )
-            st.dataframe(actual_data) 
-            # Add actual solar data from Elia API if available
-            if actual_data is not None and not actual_data.empty:
-                # Determine the value column (could be 'values' or other column name based on API response)
-                value_col = 'values' if 'values' in actual_data.columns else next((col for col in actual_data.columns if col not in ['startsOn', 'Datetime']), None)
+        # Fetch market sessions first
+        with st.spinner("Fetching market sessions..."):
+            try:
+                import requests
+                session_url = "https://predico-elia.inesctec.pt/api/v1/market/session/?status=finished"
+                response = requests.get(session_url)
                 
-                if value_col:
-                    fig.add_trace(
-                        go.Scatter(
-                            x=actual_data.index,
-                            y=actual_data[value_col],
-                            name="Elia DA 11AM",
-                            mode="lines",
-                            line_color="darkorange",
-                            line_width=2
-                        )
+                if response.status_code == 200:
+                    market_sessions = response.json().get("data", [])
+                    if not market_sessions:
+                        st.error("No market sessions available.")
+                        return
+                        
+                    # Sort sessions by date (newest first)
+                    market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
+                    
+                    # Create labels for the sessions
+                    session_labels = {}
+                    for session in market_sessions:
+                        open_date = pd.to_datetime(session["open_ts"]).strftime("%Y-%m-%d")
+                        forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                        label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
+                        session_labels[label] = session
+                    
+                    # Select market session from dropdown
+                    selected_session_label = st.selectbox(
+                        "Select Market Session:", 
+                        options=list(session_labels.keys()),
+                        index=0
                     )
-                    st.info("Added actual solar data from Elia API (green line)")
+                    
+                    selected_session = session_labels[selected_session_label]
+                    session_id = selected_session["id"]
+                    
+                    # Display basic session info
+                    st.info(f"Selected Market Session ID: {session_id}")
+                    
+                    # Resource selector (radio button)
+                    resource_type = st.radio("Select Resource Type:", ["Solar", "Wind"], horizontal=True)
+                    
+                    # Now you can continue with the rest of the function
+                    # using session_id and resource_type as needed
+                    
                 else:
-                    st.warning("Could not determine value column in actual solar data")
-
-        else:  # Wind resource
-            # Add the uncertainty band (q10 - q90) for Wind
-            if "q90" in data_slice.columns and "q10" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q90"],
-                        name="q90",
-                        mode="lines",
-                        line_color="rgba(0,0,0,0)",
-                        showlegend=True
-                    )
-                )
-
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q10"],
-                        name="Wind Uncertainty [q10–q90]",
-                        mode="lines",
-                        fill="tonexty",
-                        fillcolor="rgba(0, 100, 80, 0.4)",  # Blue-green for wind
-                        line_color="rgba(0,0,0,0)",
-                        showlegend=True
-                    )
-                )
-
-            # Add wind forecasts
-            if "q50" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["q50"],
-                        name="Wind q50 Forecast",
-                        mode="lines",
-                        line_color="lightblue"  # Blue for wind forecast
-                    )
-                )
-
-            # Add Elia forecasts for wind
-            if "DA elia (11AM)" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["DA elia (11AM)"],
-                        name="Elia DA Wind Forecast",
-                        mode="lines",
-                        line_color="darkorange"
-                    )
-                )
+                    st.error(f"Failed to fetch market sessions: HTTP {response.status_code}")
+                    return
+            except Exception as e:
+                st.error(f"Error fetching market sessions: {e}")
+                import traceback
+                st.error(traceback.format_exc())
+                return
                 
-            if "latest elia" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["latest elia"],
-                        name="Latest Elia Wind",
-                        mode="lines",
-                        line_color="blue",
-                        visible='legendonly'
-                    )
-                )
-
-            # Add wind actuals
-            if "actual elia" in data_slice.columns:
-                fig.add_trace(
-                    go.Scatter(
-                        x=data_slice.index,
-                        y=data_slice["actual elia"],
-                        name="Actual Wind",
-                        mode="lines",
-                        line_color="white"
-                    )
-                )
-
-        # Final styling
-        fig.update_layout(
-            xaxis_title="Datetime",
-            yaxis_title=f"{resource_type} MW",
-            yaxis=dict(range=[0, 2300] if resource_type == "Wind" else [0, 8000]),  # Different y-axis range for Solar/Wind
-            template="plotly_dark",
-            showlegend=True,
-            title=f"{resource_type} Forecast and Actual Data",
-            legend=dict(
-                orientation="h",
-                yanchor="bottom",
-                y=1.02,
-                xanchor="right",
-                x=1
-            )
-        )
-
-        st.plotly_chart(fig)
+        # Here your original function would continue...
+        # This is where you'd use session_id to fetch submissions, etc.
+        
     except Exception as e:
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 from google.cloud import storage
 
