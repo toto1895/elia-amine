@@ -431,6 +431,8 @@ def submission_viewer():
         import requests
         import pandas as pd
         import json
+        import plotly.graph_objects as go
+        from plotly.subplots import make_subplots
         
         # User ID from the token (used in the forecasts query)
         user_id = "21091e28-9000-43c2-b952-19093cc14fbc"
@@ -484,47 +486,138 @@ def submission_viewer():
                         challenge_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/?market_session={session_id}&resource={resource_id}"
                         challenge_response = requests.get(challenge_url, headers=headers)
                         
-                        st.write("Challenge API URL:", challenge_url)
-                        st.write("Response status code:", challenge_response.status_code)
-                        
                         if challenge_response.status_code == 200:
                             challenges = challenge_response.json().get("data", [])
                             if challenges:
-                                # Display challenges info
-                                st.subheader("Challenge Information")
-                                challenges_df = pd.DataFrame(challenges)
-                                st.dataframe(challenges_df)
+                                # Display challenges info in expandable section
+                                with st.expander("Challenge Information", expanded=False):
+                                    challenges_df = pd.DataFrame(challenges)
+                                    st.dataframe(challenges_df)
                                 
                                 # Get the challenge ID from the response
                                 challenge_id = challenges[0]["id"]
-                                st.success(f"Selected Challenge ID: {challenge_id}")
+                                target_day = challenges[0]["target_day"]
+                                st.success(f"Forecasting for target day: {target_day}")
                                 
                                 # Step 3: Fetch forecasts for the selected challenge
                                 with st.spinner(f"Fetching forecasts for challenge {challenge_id}..."):
                                     forecasts_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/submission/forecasts?challenge={challenge_id}&user={user_id}"
                                     forecasts_response = requests.get(forecasts_url, headers=headers)
                                     
-                                    st.write("Forecasts API URL:", forecasts_url)
-                                    st.write("Response status code:", forecasts_response.status_code)
-                                    
                                     if forecasts_response.status_code == 200:
                                         forecasts_data = forecasts_response.json()
                                         
-                                        # Display raw response as formatted JSON
-                                        st.subheader("Forecasts Response")
-                                        st.json(forecasts_data)
+                                        # Display raw response in expandable section
+                                        with st.expander("Raw Forecasts Data", expanded=False):
+                                            st.json(forecasts_data)
                                         
-                                        # Process the forecasts data if needed
+                                        # Process the forecasts data
                                         if "data" in forecasts_data and forecasts_data["data"]:
-                                            # Convert to DataFrame for better display
                                             try:
-                                                forecasts_df = pd.DataFrame(forecasts_data["data"])
-                                                st.subheader("Forecasts Data")
-                                                st.dataframe(forecasts_df)
+                                                # Parse forecast data
+                                                forecasts = forecasts_data["data"]
                                                 
-                                                # You could add visualizations here if needed
+                                                # Prepare data for plotting
+                                                timestamps = []
+                                                q10_values = []
+                                                q50_values = []
+                                                q90_values = []
+                                                
+                                                for point in forecasts:
+                                                    timestamps.append(pd.to_datetime(point.get("timestamp")))
+                                                    q10_values.append(point.get("q10", 0))
+                                                    q50_values.append(point.get("q50", 0))
+                                                    q90_values.append(point.get("q90", 0))
+                                                
+                                                # Create a DataFrame for easier manipulation
+                                                df = pd.DataFrame({
+                                                    'timestamp': timestamps,
+                                                    'q10': q10_values,
+                                                    'q50': q50_values,
+                                                    'q90': q90_values
+                                                })
+                                                
+                                                # Set timestamp as index
+                                                df.set_index('timestamp', inplace=True)
+                                                df.sort_index(inplace=True)
+                                                
+                                                # Display dataframe
+                                                with st.expander("Forecast Data Table", expanded=False):
+                                                    st.dataframe(df)
+                                                
+                                                # Create the plot
+                                                st.subheader(f"{resource_type} Power Forecast for {target_day}")
+                                                
+                                                # Create a plotly figure
+                                                fig = go.Figure()
+                                                
+                                                # Add the uncertainty band (q10 - q90)
+                                                fig.add_trace(
+                                                    go.Scatter(
+                                                        x=df.index,
+                                                        y=df['q90'],
+                                                        name="q90",
+                                                        mode="lines",
+                                                        line=dict(width=0),
+                                                        showlegend=False
+                                                    )
+                                                )
+                                                
+                                                fig.add_trace(
+                                                    go.Scatter(
+                                                        x=df.index,
+                                                        y=df['q10'],
+                                                        name="Uncertainty Band (q10-q90)",
+                                                        mode="lines",
+                                                        fill='tonexty',
+                                                        fillcolor='rgba(0, 100, 80, 0.2)',
+                                                        line=dict(width=0),
+                                                        showlegend=True
+                                                    )
+                                                )
+                                                
+                                                # Add median forecast line
+                                                fig.add_trace(
+                                                    go.Scatter(
+                                                        x=df.index,
+                                                        y=df['q50'],
+                                                        name="Median Forecast (q50)",
+                                                        mode="lines",
+                                                        line=dict(color='rgb(0, 100, 80)', width=2)
+                                                    )
+                                                )
+                                                
+                                                # Update layout
+                                                fig.update_layout(
+                                                    title=f"{resource_type} Power Forecast for {target_day}",
+                                                    xaxis_title="Time",
+                                                    yaxis_title="Power (MW)",
+                                                    legend=dict(
+                                                        orientation="h",
+                                                        yanchor="bottom",
+                                                        y=1.02,
+                                                        xanchor="right",
+                                                        x=1
+                                                    ),
+                                                    template="plotly_white",
+                                                    height=600
+                                                )
+                                                
+                                                st.plotly_chart(fig, use_container_width=True)
+                                                
+                                                # Add download button for the data
+                                                csv = df.to_csv()
+                                                st.download_button(
+                                                    label="Download Forecast Data as CSV",
+                                                    data=csv,
+                                                    file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
+                                                    mime="text/csv",
+                                                )
+                                                
                                             except Exception as e:
                                                 st.error(f"Error processing forecasts data: {e}")
+                                                import traceback
+                                                st.error(traceback.format_exc())
                                         else:
                                             st.warning("No forecasts data available for this challenge and user.")
                                     else:
@@ -547,8 +640,6 @@ def submission_viewer():
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-
-
 
 
 from google.cloud import storage
