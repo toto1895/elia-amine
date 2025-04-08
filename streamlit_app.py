@@ -556,104 +556,168 @@ def submission_viewer():
         # Create visualization
         fig = go.Figure()
 
-        # Add the uncertainty band (q10 - q90)
-        if "q90" in data_slice.columns and "q10" in data_slice.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["q90"],
-                    name="q90",
-                    mode="lines",
-                    line_color="rgba(0,0,0,0)",
-                    showlegend=True
-                )
-            )
-
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["q10"],
-                    name=f"{resource_type} Uncertainty [q10–q90]",
-                    mode="lines",
-                    fill="tonexty",
-                    fillcolor="rgba(0, 100, 80, 0.4)",
-                    line_color="rgba(0,0,0,0)",
-                    showlegend=True
-                )
-            )
-
-        # Add forecasts
-        if "q50" in data_slice.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["q50"],
-                    name="q50",
-                    mode="lines",
-                    line_color="rgb(5, 222, 255)"
-                )
-            )
-        if "DA elia (11AM)" in data_slice.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["DA elia (11AM)"],
-                    name="DA elia (11AM)",
-                    mode="lines",
-                    line_color="orange"
-                )
-            )
-        if "latest elia" in data_slice.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["latest elia"],
-                    name="latest elia",
-                    mode="lines",
-                    line_color="red",
-                    visible='legendonly'
-                )
-            )
-
-        # Add actuals
-        if "actual elia" in data_slice.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=data_slice.index,
-                    y=data_slice["actual elia"],
-                    name="actual elia",
-                    mode="lines",
-                    line_color="white"
-                )
-            )
-            
-        # Add actual solar data if available
-        if resource_type == "Solar" and actual_data is not None and not actual_data.empty:
-            # Determine the value column (could be 'values' or other column name based on API response)
-            value_col = 'values' if 'values' in actual_data.columns else next((col for col in actual_data.columns if col not in ['startsOn', 'Datetime']), None)
-            
-            if value_col:
+        # Different visualization based on resource type
+        if resource_type == "Solar":
+            # Add the uncertainty band (q10 - q90) for Solar
+            if "q90" in data_slice.columns and "q10" in data_slice.columns:
                 fig.add_trace(
                     go.Scatter(
-                        x=actual_data.index,
-                        y=actual_data[value_col],
-                        name="Elia PV actual",
+                        x=data_slice.index,
+                        y=data_slice["q90"],
+                        name="q90",
                         mode="lines",
-                        line_color="green",
-                        line_width=2
+                        line_color="rgba(0,0,0,0)",
+                        showlegend=True
                     )
                 )
-                st.info("Added actual solar data from Elia API (green line)")
-            else:
-                st.warning("Could not determine value column in actual solar data")
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["q10"],
+                        name="Solar Uncertainty [q10–q90]",
+                        mode="lines",
+                        fill="tonexty",
+                        fillcolor="rgba(255, 215, 0, 0.3)",  # Yellow-ish color for solar
+                        line_color="rgba(0,0,0,0)",
+                        showlegend=True
+                    )
+                )
+
+            # Add solar forecasts
+            if "q50" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["q50"],
+                        name="Solar q50 Forecast",
+                        mode="lines",
+                        line_color="rgb(255, 165, 0)"  # Orange for solar forecast
+                    )
+                )
+            
+            # Add solar actuals from the model
+            if "actual elia" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["actual elia"],
+                        name="Model Solar Actual",
+                        mode="lines",
+                        line_color="yellow"
+                    )
+                )
+                
+            # Add actual solar data from Elia API if available
+            if actual_data is not None and not actual_data.empty:
+                # Determine the value column (could be 'values' or other column name based on API response)
+                value_col = 'values' if 'values' in actual_data.columns else next((col for col in actual_data.columns if col not in ['startsOn', 'Datetime']), None)
+                
+                if value_col:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=actual_data.index,
+                            y=actual_data[value_col],
+                            name="Elia PV Actual",
+                            mode="lines",
+                            line_color="green",
+                            line_width=2
+                        )
+                    )
+                    st.info("Added actual solar data from Elia API (green line)")
+                else:
+                    st.warning("Could not determine value column in actual solar data")
+
+        else:  # Wind resource
+            # Add the uncertainty band (q10 - q90) for Wind
+            if "q90" in data_slice.columns and "q10" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["q90"],
+                        name="q90",
+                        mode="lines",
+                        line_color="rgba(0,0,0,0)",
+                        showlegend=True
+                    )
+                )
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["q10"],
+                        name="Wind Uncertainty [q10–q90]",
+                        mode="lines",
+                        fill="tonexty",
+                        fillcolor="rgba(0, 100, 80, 0.4)",  # Blue-green for wind
+                        line_color="rgba(0,0,0,0)",
+                        showlegend=True
+                    )
+                )
+
+            # Add wind forecasts
+            if "q50" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["q50"],
+                        name="Wind q50 Forecast",
+                        mode="lines",
+                        line_color="rgb(5, 222, 255)"  # Blue for wind forecast
+                    )
+                )
+
+            # Add Elia forecasts for wind
+            if "DA elia (11AM)" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["DA elia (11AM)"],
+                        name="Elia DA Wind Forecast",
+                        mode="lines",
+                        line_color="skyblue"
+                    )
+                )
+                
+            if "latest elia" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["latest elia"],
+                        name="Latest Elia Wind",
+                        mode="lines",
+                        line_color="blue",
+                        visible='legendonly'
+                    )
+                )
+
+            # Add wind actuals
+            if "actual elia" in data_slice.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=data_slice.index,
+                        y=data_slice["actual elia"],
+                        name="Actual Wind",
+                        mode="lines",
+                        line_color="white"
+                    )
+                )
 
         # Final styling
         fig.update_layout(
             xaxis_title="Datetime",
             yaxis_title=f"{resource_type} MW",
-            yaxis=dict(range=[0, 2300]),
+            yaxis=dict(range=[0, 2300] if resource_type == "Wind" else [0, 1200]),  # Different y-axis range for Solar/Wind
             template="plotly_dark",
-            showlegend=True  # Changed to True to show the actual solar data legend
+            showlegend=True,
+            title=f"{resource_type} Forecast and Actual Data",
+            legend=dict(
+                orientation="h",
+                yanchor="bottom",
+                y=1.02,
+                xanchor="right",
+                x=1
+            )
         )
 
         st.plotly_chart(fig)
@@ -661,7 +725,7 @@ def submission_viewer():
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-
+        
 from google.cloud import storage
 
 def list_blobs_in_bucket(bucket_name, prefix=None):
