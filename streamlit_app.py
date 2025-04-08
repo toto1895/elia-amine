@@ -414,11 +414,7 @@ def submission_viewer():
         resource_type = st.radio("Select Resource Type:", ["Solar", "Wind"], horizontal=True)
         
         # Set resource IDs based on selection
-        solar_resource_id = "5792ca63-2051-4186-8c5c-7167ee1c6c6f"
-        wind_resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"
-        
-        selected_resource_id = solar_resource_id if resource_type == "Solar" else wind_resource_id
-        
+
         # Authenticate & get submissions
         api = get_api()
         if api is None:
@@ -434,18 +430,18 @@ def submission_viewer():
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
         # Create the label column
         df_subs["label"] = (
-            f"{resource_type} market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
+            f"market date " + ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d %H:%M:%S"))
             + " | ID: " + df_subs["id"].astype(str)
             + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
         )
-        df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
+        df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d %H:%M:%S"))
         #df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
         if df_subs.empty:
-            st.warning(f"No {resource_type.lower()} submissions available after filtering.")
+            st.warning(f"No submissions available after filtering.")
             return
 
-        selected_label = st.selectbox(f"Select {resource_type.lower()} submission", df_subs["label"])
+        selected_label = st.selectbox(f"Select ", df_subs["label"])
 
         # Extract the row matching the chosen label
         chosen_row = df_subs.loc[df_subs["label"] == selected_label].iloc[0]
