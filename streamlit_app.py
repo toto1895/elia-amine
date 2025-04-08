@@ -431,13 +431,7 @@ def submission_viewer():
             return
         
         # Filter submissions by selected resource type
-        if "market_session_challenge_resource_id" in df_subs.columns:
-            df_subs = df_subs[df_subs["market_session_challenge_resource_id"] == selected_resource_id]
-            if df_subs.empty:
-                st.warning(f"No submissions found for {resource_type} resource. Please check if you have any {resource_type.lower()} submissions.")
-                return
-        else:
-            st.warning("Resource ID column not found in submissions data. Showing all submissions.")
+        
 
         df_subs["registered_at"] = df_subs["registered_at"].dt.tz_convert('CET')
         # Create the label column
