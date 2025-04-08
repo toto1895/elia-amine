@@ -607,7 +607,7 @@ def submission_viewer():
                         line_color="white"
                     )
                 )
-                
+            st.dataframe(actual_data) 
             # Add actual solar data from Elia API if available
             if actual_data is not None and not actual_data.empty:
                 # Determine the value column (could be 'values' or other column name based on API response)
