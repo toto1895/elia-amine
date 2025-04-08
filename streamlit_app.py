@@ -415,7 +415,7 @@ def submission_viewer():
         
         # Set resource IDs based on selection
         solar_resource_id = "5792ca63-2051-4186-8c5c-7167ee1c6c6f"
-        wind_resource_id =  "491949aa-8662-4010-8a29-75f4267a76c2"  # Replace with actual wind resource ID
+        wind_resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"
         
         selected_resource_id = solar_resource_id if resource_type == "Solar" else wind_resource_id
         
@@ -429,7 +429,7 @@ def submission_viewer():
         if df_subs.empty:
             st.error("No submissions found. Please check your credentials and connection.")
             return
-        #st.dataframe(df_subs)
+        
         # Filter submissions by selected resource type
         if "market_session_challenge_resource_id" in df_subs.columns:
             df_subs = df_subs[df_subs["market_session_challenge_resource_id"] == selected_resource_id]
@@ -449,8 +449,6 @@ def submission_viewer():
         df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
         df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
-        #st.dataframe(df_subs.sort_values('registered_at', ascending=False))
-
         if df_subs.empty:
             st.warning(f"No {resource_type.lower()} submissions available after filtering.")
             return
@@ -461,6 +459,11 @@ def submission_viewer():
         chosen_row = df_subs.loc[df_subs["label"] == selected_label].iloc[0]
         submission_time = chosen_row["registered_at"]
         challenge_id = chosen_row["market_session_challenge"]
+        
+        # Get the selected date for the market
+        selected_date = submission_time + pd.Timedelta(days=1)
+        selected_date_utc = selected_date.tz_convert('UTC').replace(hour=0, minute=0, second=0, microsecond=0)
+        selected_date_end = selected_date_utc + pd.Timedelta(days=1)
 
         # Fetch data for the chosen submission (scores + forecast)
         scores, forecasts = fetch_submission_data(api, challenge_id, submission_time)
@@ -508,6 +511,47 @@ def submission_viewer():
             st.markdown(f"**RMSE (DA elia):** {eliarmse} , MASE : {eliamase}")
         else:
             st.warning("Missing columns needed for metrics calculation")
+
+        # Fetch actual solar data from Elia API if Solar is selected
+        actual_data = None
+        if resource_type == "Solar":
+            with st.spinner("Fetching actual measured PV data from Elia..."):
+                try:
+                    # Using the API endpoint with direct JSON response
+                    api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_utc.strftime("%Y-%m-%d")}&sourceID=1'
+                    
+                    st.info(f"Fetching solar data from: {api_url}")
+                    
+                    # Import requests for API call
+                    import requests
+                    
+                    # Read the JSON data directly
+                    response = requests.get(api_url)
+                    if response.status_code == 200:
+                        solar_data = response.json()
+                        
+                        # Convert the JSON data to a pandas DataFrame
+                        actual_pv = pd.DataFrame(solar_data)
+                        
+                        # Convert timestamp string to datetime
+                        actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
+                        actual_pv = actual_pv.set_index('Datetime')
+                        
+                        # Filter to match our date range
+                        actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
+                                             (actual_pv.index <= selected_date_end)]
+                        
+                        if not actual_pv.empty:
+                            st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
+                            actual_data = actual_pv
+                        else:
+                            st.warning("No actual solar data found for the selected date range")
+                    else:
+                        st.error(f"Failed to fetch solar data: {response.status_code} - {response.text}")
+                except Exception as e:
+                    st.error(f"Error fetching solar data: {e}")
+                    import traceback
+                    st.error(traceback.format_exc())
 
         # Create visualization
         fig = go.Figure()
@@ -582,6 +626,26 @@ def submission_viewer():
                     line_color="white"
                 )
             )
+            
+        # Add actual solar data if available
+        if resource_type == "Solar" and actual_data is not None and not actual_data.empty:
+            # Determine the value column (could be 'values' or other column name based on API response)
+            value_col = 'values' if 'values' in actual_data.columns else next((col for col in actual_data.columns if col not in ['startsOn', 'Datetime']), None)
+            
+            if value_col:
+                fig.add_trace(
+                    go.Scatter(
+                        x=actual_data.index,
+                        y=actual_data[value_col],
+                        name="Elia PV actual",
+                        mode="lines",
+                        line_color="green",
+                        line_width=2
+                    )
+                )
+                st.info("Added actual solar data from Elia API (green line)")
+            else:
+                st.warning("Could not determine value column in actual solar data")
 
         # Final styling
         fig.update_layout(
@@ -589,7 +653,7 @@ def submission_viewer():
             yaxis_title=f"{resource_type} MW",
             yaxis=dict(range=[0, 2300]),
             template="plotly_dark",
-            showlegend=False
+            showlegend=True  # Changed to True to show the actual solar data legend
         )
 
         st.plotly_chart(fig)
@@ -597,8 +661,6 @@ def submission_viewer():
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-
-
 
 from google.cloud import storage
 
