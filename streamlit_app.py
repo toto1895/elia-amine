@@ -410,9 +410,20 @@ def submission_viewer():
     st.subheader("Submission Viewer")
 
     try:
-        # Set up headers with the provided Bearer token
+        # Set up all the important headers from the original request
         headers = {
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A"
+            "accept-encoding": "gzip, deflate, br, zstd",
+            "accept-language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6,da;q=0.5,it;q=0.4,la;q=0.3",
+            "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A",
+            "host": "predico-elia.inesctec.pt",
+            "referer": "https://predico-elia.inesctec.pt/sessions",
+            "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-origin",
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
         }
         
         # Fetch market sessions using authentication
@@ -422,6 +433,10 @@ def submission_viewer():
                 
                 session_url = "https://predico-elia.inesctec.pt/api/v1/market/session/?status=finished"
                 response = requests.get(session_url, headers=headers)
+                
+                # Debug information
+                st.write("Request URL:", session_url)
+                st.write("Response status code:", response.status_code)
                 
                 if response.status_code == 200:
                     market_sessions = response.json().get("data", [])
@@ -462,11 +477,11 @@ def submission_viewer():
                 elif response.status_code == 401:
                     st.error("Authentication failed. The provided Bearer token may have expired or is invalid.")
                     # Display the full response to help with debugging
-                    st.code(response.text)
+                    st.text(response.text)
                     return None, None
                 else:
                     st.error(f"Failed to fetch market sessions: HTTP {response.status_code}")
-                    st.code(response.text)
+                    st.text(response.text)
                     return None, None
             except Exception as e:
                 st.error(f"Error fetching market sessions: {e}")
@@ -479,6 +494,9 @@ def submission_viewer():
         import traceback
         st.error(traceback.format_exc())
         return None, None
+
+
+
 
 from google.cloud import storage
 
