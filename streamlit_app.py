@@ -412,31 +412,34 @@ def submission_viewer():
     try:
         # Set up all the important headers from the original request
         headers = {
-            "accept-encoding": "gzip, deflate, br, zstd",
-            "accept-language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6,da;q=0.5,it;q=0.4,la;q=0.3",
-            "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A",
-            "host": "predico-elia.inesctec.pt",
-            "referer": "https://predico-elia.inesctec.pt/sessions",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Encoding": "gzip, deflate, br, zstd",
+            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6,da;q=0.5,it;q=0.4,la;q=0.3",
+            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A",
+            "Connection": "keep-alive",
+            "Host": "predico-elia.inesctec.pt",
+            "Referer": "https://predico-elia.inesctec.pt/sessions",
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-origin",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
             "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
             "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"',
-            "sec-fetch-dest": "empty",
-            "sec-fetch-mode": "cors",
-            "sec-fetch-site": "same-origin",
-            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36"
+            "sec-ch-ua-platform": '"Windows"'
         }
         
-        # Fetch market sessions using authentication
+        import requests
+        import pandas as pd
+        import json
+        
+        # User ID from the token (used in the forecasts query)
+        user_id = "21091e28-9000-43c2-b952-19093cc14fbc"
+        
+        # Step 1: Fetch market sessions
         with st.spinner("Fetching market sessions..."):
             try:
-                import requests
-                
                 session_url = "https://predico-elia.inesctec.pt/api/v1/market/session/?status=finished"
                 response = requests.get(session_url, headers=headers)
-                
-                # Debug information
-                st.write("Request URL:", session_url)
-                st.write("Response status code:", response.status_code)
                 
                 if response.status_code == 200:
                     market_sessions = response.json().get("data", [])
@@ -469,31 +472,81 @@ def submission_viewer():
                     st.info(f"Selected Market Session ID: {session_id}")
                     
                     # Resource selector (radio button)
-                    resource_type = st.radio("Select Resource Type:", ["Solar", "Wind"], horizontal=True)
+                    resource_options = {
+                        "Solar": "491949aa-8662-4010-8a29-75f4267a76c2",
+                        "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
+                    }
+                    resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
+                    resource_id = resource_options[resource_type]
                     
-                    # Return the selected session_id and resource_type to be used by the rest of your code
-                    return session_id, resource_type
-                    
-                elif response.status_code == 401:
-                    st.error("Authentication failed. The provided Bearer token may have expired or is invalid.")
-                    # Display the full response to help with debugging
-                    st.text(response.text)
-                    return None, None
+                    # Step 2: Fetch challenges for the selected market session and resource
+                    with st.spinner(f"Fetching challenges for market session {session_id}..."):
+                        challenge_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/?market_session={session_id}&resource={resource_id}"
+                        challenge_response = requests.get(challenge_url, headers=headers)
+                        
+                        st.write("Challenge API URL:", challenge_url)
+                        st.write("Response status code:", challenge_response.status_code)
+                        
+                        if challenge_response.status_code == 200:
+                            challenges = challenge_response.json().get("data", [])
+                            if challenges:
+                                # Display challenges info
+                                st.subheader("Challenge Information")
+                                challenges_df = pd.DataFrame(challenges)
+                                st.dataframe(challenges_df)
+                                
+                                # Get the challenge ID from the response
+                                challenge_id = challenges[0]["id"]
+                                st.success(f"Selected Challenge ID: {challenge_id}")
+                                
+                                # Step 3: Fetch forecasts for the selected challenge
+                                with st.spinner(f"Fetching forecasts for challenge {challenge_id}..."):
+                                    forecasts_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/submission/forecasts?challenge={challenge_id}&user={user_id}"
+                                    forecasts_response = requests.get(forecasts_url, headers=headers)
+                                    
+                                    st.write("Forecasts API URL:", forecasts_url)
+                                    st.write("Response status code:", forecasts_response.status_code)
+                                    
+                                    if forecasts_response.status_code == 200:
+                                        forecasts_data = forecasts_response.json()
+                                        
+                                        # Display raw response as formatted JSON
+                                        st.subheader("Forecasts Response")
+                                        st.json(forecasts_data)
+                                        
+                                        # Process the forecasts data if needed
+                                        if "data" in forecasts_data and forecasts_data["data"]:
+                                            # Convert to DataFrame for better display
+                                            try:
+                                                forecasts_df = pd.DataFrame(forecasts_data["data"])
+                                                st.subheader("Forecasts Data")
+                                                st.dataframe(forecasts_df)
+                                                
+                                                # You could add visualizations here if needed
+                                            except Exception as e:
+                                                st.error(f"Error processing forecasts data: {e}")
+                                        else:
+                                            st.warning("No forecasts data available for this challenge and user.")
+                                    else:
+                                        st.error(f"Failed to fetch forecasts: HTTP {forecasts_response.status_code}")
+                                        st.text(forecasts_response.text)
+                            else:
+                                st.warning(f"No challenges found for market session {session_id} and resource {resource_type}")
+                        else:
+                            st.error(f"Failed to fetch challenges: HTTP {challenge_response.status_code}")
+                            st.text(challenge_response.text)
                 else:
                     st.error(f"Failed to fetch market sessions: HTTP {response.status_code}")
                     st.text(response.text)
-                    return None, None
             except Exception as e:
-                st.error(f"Error fetching market sessions: {e}")
+                st.error(f"Error: {e}")
                 import traceback
                 st.error(traceback.format_exc())
-                return None, None
                 
     except Exception as e:
         st.error(f"Error in submission viewer: {e}")
         import traceback
         st.error(traceback.format_exc())
-        return None, None
 
 
 
