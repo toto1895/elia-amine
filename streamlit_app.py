@@ -415,7 +415,7 @@ def submission_viewer():
         
         # Set resource IDs based on selection
         solar_resource_id = "5792ca63-2051-4186-8c5c-7167ee1c6c6f"
-        wind_resource_id = "491949aa-8662-4010-8a29-75f4267a76c2e"  # Replace with actual wind resource ID
+        wind_resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"  # Replace with actual wind resource ID
         
         selected_resource_id = solar_resource_id if resource_type == "Solar" else wind_resource_id
         
