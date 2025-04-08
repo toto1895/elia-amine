@@ -439,7 +439,7 @@ def submission_viewer():
             + " | Time: " + df_subs["registered_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
         )
         df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
-        df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
+        #df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
         if df_subs.empty:
             st.warning(f"No {resource_type.lower()} submissions available after filtering.")
