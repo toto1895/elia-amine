@@ -415,7 +415,7 @@ def submission_viewer():
         
         # Set resource IDs based on selection
         solar_resource_id = "5792ca63-2051-4186-8c5c-7167ee1c6c6f"
-        wind_resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"  # Replace with actual wind resource ID
+        wind_resource_id =  "491949aa-8662-4010-8a29-75f4267a76c2"  # Replace with actual wind resource ID
         
         selected_resource_id = solar_resource_id if resource_type == "Solar" else wind_resource_id
         
@@ -429,7 +429,7 @@ def submission_viewer():
         if df_subs.empty:
             st.error("No submissions found. Please check your credentials and connection.")
             return
-        st.dataframe(df_subs)
+        #st.dataframe(df_subs)
         # Filter submissions by selected resource type
         if "market_session_challenge_resource_id" in df_subs.columns:
             df_subs = df_subs[df_subs["market_session_challenge_resource_id"] == selected_resource_id]
@@ -449,7 +449,7 @@ def submission_viewer():
         df_subs["dt"] = ((df_subs["registered_at"] + pd.Timedelta(days=1)).dt.strftime("%Y-%m-%d"))
         df_subs = df_subs.drop_duplicates(subset=["dt"], keep="last")
 
-        st.dataframe(df_subs.sort_values('registered_at', ascending=False))
+        #st.dataframe(df_subs.sort_values('registered_at', ascending=False))
 
         if df_subs.empty:
             st.warning(f"No {resource_type.lower()} submissions available after filtering.")
