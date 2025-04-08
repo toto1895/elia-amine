@@ -429,7 +429,7 @@ def submission_viewer():
         if df_subs.empty:
             st.error("No submissions found. Please check your credentials and connection.")
             return
-
+        st.dataframe(df_subs)
         # Filter submissions by selected resource type
         if "market_session_challenge_resource_id" in df_subs.columns:
             df_subs = df_subs[df_subs["market_session_challenge_resource_id"] == selected_resource_id]
