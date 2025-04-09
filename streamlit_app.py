@@ -411,7 +411,6 @@ from predicoclient import PredicoClient
 
 def submission_viewer():
     """Display submission details and visualizations with proper authentication."""
-    st.set_page_config(page_title="Predico Submission Viewer", page_icon="📊", layout="wide")
     st.title("Predico Submission Viewer")
     
     # Initialize session state variables
