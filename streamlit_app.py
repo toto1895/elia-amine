@@ -405,241 +405,241 @@ def list_gcs_files(connection, prefix):
         return []
 
 # Application pages
-def submission_viewer():
-    """Display submission details and visualizations."""
-    st.subheader("Submission Viewer")
+from improved_predico_client import PredicoClient
 
-    try:
-        # Set up all the important headers from the original request
-        headers = {
-            "Accept": "application/json, text/plain, */*",
-            "Accept-Encoding": "gzip, deflate, br, zstd",
-            "Accept-Language": "fr-FR,fr;q=0.9,en-US;q=0.8,en;q=0.7,de;q=0.6,da;q=0.5,it;q=0.4,la;q=0.3",
-            "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzQ0MTUwMTQ5LCJpYXQiOjE3NDQxNDY1NDksImp0aSI6IjY3YmYzNDM1MzZmMjQ2MmNhNmI2YjFjYWJmZTQwZmRlIiwidXNlcl9pZCI6IjIxMDkxZTI4LTkwMDAtNDNjMi1iOTUyLTE5MDkzY2MxNGZiYyJ9.mH3BCDOPSV0MckP_OVsC0Tmr0bAjSvDuiOkMFTtaz9A",
-            "Connection": "keep-alive",
-            "Host": "predico-elia.inesctec.pt",
-            "Referer": "https://predico-elia.inesctec.pt/sessions",
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-origin",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36",
-            "sec-ch-ua": '"Chromium";v="134", "Not:A-Brand";v="24", "Google Chrome";v="134"',
-            "sec-ch-ua-mobile": "?0",
-            "sec-ch-ua-platform": '"Windows"'
-        }
+def submission_viewer():
+    """Display submission details and visualizations with proper authentication."""
+    st.set_page_config(page_title="Predico Submission Viewer", page_icon="📊", layout="wide")
+    st.title("Predico Submission Viewer")
+    
+    # Initialize session state variables
+    if 'predico_client' not in st.session_state:
+        st.session_state.predico_client = None
+        st.session_state.is_authenticated = False
+    
+    # Authentication section
+    with st.sidebar:
+        st.header("Authentication")
         
-        import requests
-        import pandas as pd
-        import json
-        import plotly.graph_objects as go
-        from plotly.subplots import make_subplots
-        
-        # User ID from the token (used in the forecasts query)
-        user_id = "21091e28-9000-43c2-b952-19093cc14fbc"
-        
-        # Step 1: Fetch market sessions
-        with st.spinner("Fetching market sessions..."):
-            try:
-                session_url = "https://predico-elia.inesctec.pt/api/v1/market/session/?status=finished"
-                response = requests.get(session_url, headers=headers)
+        if not st.session_state.is_authenticated:
+            # Login form
+            with st.form("login_form"):
+                email = st.text_input("Email", type="default")
+                password = st.text_input("Password", type="password")
+                submit_button = st.form_submit_button("Login")
                 
-                if response.status_code == 200:
-                    market_sessions = response.json().get("data", [])
-                    if not market_sessions:
-                        st.error("No market sessions available.")
-                        return
-                        
-                    # Sort sessions by date (newest first)
-                    market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
-                    
-                    # Create labels for the sessions
-                    session_labels = {}
-                    for session in market_sessions:
-                        open_date = pd.to_datetime(session["open_ts"]).strftime("%Y-%m-%d")
-                        forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                        label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
-                        session_labels[label] = session
-                    
-                    # Select market session from dropdown
-                    selected_session_label = st.selectbox(
-                        "Select Market Session:", 
-                        options=list(session_labels.keys()),
-                        index=0
-                    )
-                    
-                    selected_session = session_labels[selected_session_label]
-                    session_id = selected_session["id"]
-                    
-                    # Display basic session info
-                    st.info(f"Selected Market Session ID: {session_id}")
-                    
-                    # Resource selector (radio button)
-                    resource_options = {
-                        "Solar": "491949aa-8662-4010-8a29-75f4267a76c2",
-                        "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
-                    }
-                    resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
-                    resource_id = resource_options[resource_type]
-                    
-                    # Step 2: Fetch challenges for the selected market session and resource
-                    with st.spinner(f"Fetching challenges for market session {session_id}..."):
-                        challenge_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/?market_session={session_id}&resource={resource_id}"
-                        challenge_response = requests.get(challenge_url, headers=headers)
-                        
-                        if challenge_response.status_code == 200:
-                            challenges = challenge_response.json().get("data", [])
-                            if challenges:
-                                # Display challenges info in expandable section
-                                with st.expander("Challenge Information", expanded=False):
-                                    challenges_df = pd.DataFrame(challenges)
-                                    st.dataframe(challenges_df)
-                                
-                                # Get the challenge ID from the response
-                                challenge_id = challenges[0]["id"]
-                                target_day = challenges[0]["target_day"]
-                                st.success(f"Forecasting for target day: {target_day}")
-                                
-                                # Step 3: Fetch forecasts for the selected challenge
-                                with st.spinner(f"Fetching forecasts for challenge {challenge_id}..."):
-                                    forecasts_url = f"https://predico-elia.inesctec.pt/api/v1/market/challenge/submission/forecasts?challenge={challenge_id}&user={user_id}"
-                                    forecasts_response = requests.get(forecasts_url, headers=headers)
-                                    
-                                    if forecasts_response.status_code == 200:
-                                        forecasts_data = forecasts_response.json()
-                                        
-                                        # Display raw response in expandable section
-                                        with st.expander("Raw Forecasts Data", expanded=False):
-                                            st.json(forecasts_data)
-                                        
-                                        # Process the forecasts data
-                                        if "data" in forecasts_data and forecasts_data["data"]:
-                                            try:
-                                                # Parse forecast data
-                                                forecasts = forecasts_data["data"]
-                                                
-                                                # Prepare data for plotting
-                                                timestamps = []
-                                                q10_values = []
-                                                q50_values = []
-                                                q90_values = []
-                                                
-                                                for point in forecasts:
-                                                    timestamps.append(pd.to_datetime(point.get("timestamp")))
-                                                    q10_values.append(point.get("q10", 0))
-                                                    q50_values.append(point.get("q50", 0))
-                                                    q90_values.append(point.get("q90", 0))
-                                                
-                                                # Create a DataFrame for easier manipulation
-                                                df = pd.DataFrame({
-                                                    'timestamp': timestamps,
-                                                    'q10': q10_values,
-                                                    'q50': q50_values,
-                                                    'q90': q90_values
-                                                })
-                                                
-                                                # Set timestamp as index
-                                                df.set_index('timestamp', inplace=True)
-                                                df.sort_index(inplace=True)
-                                                
-                                                # Display dataframe
-                                                with st.expander("Forecast Data Table", expanded=False):
-                                                    st.dataframe(df)
-                                                
-                                                # Create the plot
-                                                st.subheader(f"{resource_type} Power Forecast for {target_day}")
-                                                
-                                                # Create a plotly figure
-                                                fig = go.Figure()
-                                                
-                                                # Add the uncertainty band (q10 - q90)
-                                                fig.add_trace(
-                                                    go.Scatter(
-                                                        x=df.index,
-                                                        y=df['q90'],
-                                                        name="q90",
-                                                        mode="lines",
-                                                        line=dict(width=0),
-                                                        showlegend=False
-                                                    )
-                                                )
-                                                
-                                                fig.add_trace(
-                                                    go.Scatter(
-                                                        x=df.index,
-                                                        y=df['q10'],
-                                                        name="Uncertainty Band (q10-q90)",
-                                                        mode="lines",
-                                                        fill='tonexty',
-                                                        fillcolor='rgba(0, 100, 80, 0.2)',
-                                                        line=dict(width=0),
-                                                        showlegend=True
-                                                    )
-                                                )
-                                                
-                                                # Add median forecast line
-                                                fig.add_trace(
-                                                    go.Scatter(
-                                                        x=df.index,
-                                                        y=df['q50'],
-                                                        name="Median Forecast (q50)",
-                                                        mode="lines",
-                                                        line=dict(color='rgb(0, 100, 80)', width=2)
-                                                    )
-                                                )
-                                                
-                                                # Update layout
-                                                fig.update_layout(
-                                                    title=f"{resource_type} Power Forecast for {target_day}",
-                                                    xaxis_title="Time",
-                                                    yaxis_title="Power (MW)",
-                                                    legend=dict(
-                                                        orientation="h",
-                                                        yanchor="bottom",
-                                                        y=1.02,
-                                                        xanchor="right",
-                                                        x=1
-                                                    ),
-                                                    template="plotly_white",
-                                                    height=600
-                                                )
-                                                
-                                                st.plotly_chart(fig, use_container_width=True)
-                                                
-                                                # Add download button for the data
-                                                csv = df.to_csv()
-                                                st.download_button(
-                                                    label="Download Forecast Data as CSV",
-                                                    data=csv,
-                                                    file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
-                                                    mime="text/csv",
-                                                )
-                                                
-                                            except Exception as e:
-                                                st.error(f"Error processing forecasts data: {e}")
-                                                import traceback
-                                                st.error(traceback.format_exc())
-                                        else:
-                                            st.warning("No forecasts data available for this challenge and user.")
-                                    else:
-                                        st.error(f"Failed to fetch forecasts: HTTP {forecasts_response.status_code}")
-                                        st.text(forecasts_response.text)
-                            else:
-                                st.warning(f"No challenges found for market session {session_id} and resource {resource_type}")
+                if submit_button and email and password:
+                    with st.spinner("Authenticating..."):
+                        client = PredicoClient(email, password)
+                        if client.authenticate():
+                            st.session_state.predico_client = client
+                            st.session_state.is_authenticated = True
+                            st.success("Logged in successfully!")
+                            # Force a rerun to update the UI
+                            st.rerun()
                         else:
-                            st.error(f"Failed to fetch challenges: HTTP {challenge_response.status_code}")
-                            st.text(challenge_response.text)
-                else:
-                    st.error(f"Failed to fetch market sessions: HTTP {response.status_code}")
-                    st.text(response.text)
-            except Exception as e:
-                st.error(f"Error: {e}")
-                import traceback
-                st.error(traceback.format_exc())
+                            st.error("Authentication failed. Please check your credentials.")
+        else:
+            # Show user info and logout button when logged in
+            st.success(f"Logged in as: {st.session_state.predico_client.email}")
+            st.info(f"User ID: {st.session_state.predico_client.user_id}")
+            
+            if st.button("Logout"):
+                st.session_state.predico_client = None
+                st.session_state.is_authenticated = False
+                st.success("Logged out successfully!")
+                # Force a rerun to update the UI
+                st.rerun()
+    
+    # Main content - only show when authenticated
+    if st.session_state.is_authenticated and st.session_state.predico_client:
+        client = st.session_state.predico_client
+        
+        try:
+            # Step 1: Fetch market sessions
+            with st.spinner("Fetching market sessions..."):
+                market_sessions = client.get_market_sessions(status="finished")
                 
-    except Exception as e:
-        st.error(f"Error in submission viewer: {e}")
-        import traceback
-        st.error(traceback.format_exc())
+                if not market_sessions:
+                    st.error("No market sessions available.")
+                    return
+                    
+                # Sort sessions by date (newest first)
+                market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
+                
+                # Create labels for the sessions
+                session_labels = {}
+                for session in market_sessions:
+                    open_date = pd.to_datetime(session["open_ts"]).strftime("%Y-%m-%d")
+                    forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
+                    session_labels[label] = session
+                
+                # Select market session from dropdown
+                selected_session_label = st.selectbox(
+                    "Select Market Session:", 
+                    options=list(session_labels.keys()),
+                    index=0
+                )
+                
+                selected_session = session_labels[selected_session_label]
+                session_id = selected_session["id"]
+                
+                # Display basic session info
+                st.info(f"Selected Market Session ID: {session_id}")
+                
+                # Resource selector (radio button)
+                resource_options = {
+                    "Solar": "491949aa-8662-4010-8a29-75f4267a76c2",
+                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
+                }
+                resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
+                resource_id = resource_options[resource_type]
+                
+                # Step 2: Fetch challenges for the selected market session and resource
+                with st.spinner(f"Fetching challenges for market session {session_id}..."):
+                    challenges = client.get_challenges(session_id, resource_id)
+                    
+                    if challenges:
+                        # Display challenges info in expandable section
+                        with st.expander("Challenge Information", expanded=False):
+                            challenges_df = pd.DataFrame(challenges)
+                            st.dataframe(challenges_df)
+                        
+                        # Get the challenge ID from the response
+                        challenge_id = challenges[0]["id"]
+                        target_day = challenges[0]["target_day"]
+                        st.success(f"Forecasting for target day: {target_day}")
+                        
+                        # Step 3: Fetch forecasts for the selected challenge
+                        with st.spinner(f"Fetching forecasts for challenge {challenge_id}..."):
+                            # Use the user_id from the client (extracted from token)
+                            forecasts_data = client.get_forecasts(challenge_id)
+                            
+                            if forecasts_data:
+                                # Display raw response in expandable section
+                                with st.expander("Raw Forecasts Data", expanded=False):
+                                    st.json(forecasts_data)
+                                
+                                # Process the forecasts data
+                                if "data" in forecasts_data and forecasts_data["data"]:
+                                    try:
+                                        # Parse forecast data
+                                        forecasts = forecasts_data["data"]
+                                        
+                                        # Prepare data for plotting
+                                        timestamps = []
+                                        q10_values = []
+                                        q50_values = []
+                                        q90_values = []
+                                        
+                                        for point in forecasts:
+                                            timestamps.append(pd.to_datetime(point.get("timestamp")))
+                                            q10_values.append(point.get("q10", 0))
+                                            q50_values.append(point.get("q50", 0))
+                                            q90_values.append(point.get("q90", 0))
+                                        
+                                        # Create a DataFrame for easier manipulation
+                                        df = pd.DataFrame({
+                                            'timestamp': timestamps,
+                                            'q10': q10_values,
+                                            'q50': q50_values,
+                                            'q90': q90_values
+                                        })
+                                        
+                                        # Set timestamp as index
+                                        df.set_index('timestamp', inplace=True)
+                                        df.sort_index(inplace=True)
+                                        
+                                        # Display dataframe
+                                        with st.expander("Forecast Data Table", expanded=False):
+                                            st.dataframe(df)
+                                        
+                                        # Create the plot
+                                        st.subheader(f"{resource_type} Power Forecast for {target_day}")
+                                        
+                                        # Create a plotly figure
+                                        fig = go.Figure()
+                                        
+                                        # Add the uncertainty band (q10 - q90)
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q90'],
+                                                name="q90",
+                                                mode="lines",
+                                                line=dict(width=0),
+                                                showlegend=False
+                                            )
+                                        )
+                                        
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q10'],
+                                                name="Uncertainty Band (q10-q90)",
+                                                mode="lines",
+                                                fill='tonexty',
+                                                fillcolor='rgba(0, 100, 80, 0.2)',
+                                                line=dict(width=0),
+                                                showlegend=True
+                                            )
+                                        )
+                                        
+                                        # Add median forecast line
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q50'],
+                                                name="Median Forecast (q50)",
+                                                mode="lines",
+                                                line=dict(color='rgb(0, 100, 80)', width=2)
+                                            )
+                                        )
+                                        
+                                        # Update layout
+                                        fig.update_layout(
+                                            title=f"{resource_type} Power Forecast for {target_day}",
+                                            xaxis_title="Time",
+                                            yaxis_title="Power (MW)",
+                                            legend=dict(
+                                                orientation="h",
+                                                yanchor="bottom",
+                                                y=1.02,
+                                                xanchor="right",
+                                                x=1
+                                            ),
+                                            template="plotly_white",
+                                            height=600
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        
+                                        # Add download button for the data
+                                        csv = df.to_csv()
+                                        st.download_button(
+                                            label="Download Forecast Data as CSV",
+                                            data=csv,
+                                            file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
+                                            mime="text/csv",
+                                        )
+                                        
+                                    except Exception as e:
+                                        st.error(f"Error processing forecasts data: {e}")
+                                        import traceback
+                                        st.error(traceback.format_exc())
+                                else:
+                                    st.warning("No forecasts data available for this challenge and user.")
+                    else:
+                        st.warning(f"No challenges found for market session {session_id} and resource {resource_type}")
+                
+        except Exception as e:
+            st.error(f"Error in submission viewer: {e}")
+            import traceback
+            st.error(traceback.format_exc())
+    else:
+        # Show login message when not authenticated
+        st.info("Please log in using the sidebar to access the submission viewer.")
 
 
 from google.cloud import storage
