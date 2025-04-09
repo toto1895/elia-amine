@@ -13,8 +13,10 @@ from google.oauth2 import service_account
 import json
 import time
 import tempfile
-# Clear cache on startup
+
+
 st.cache_data.clear()
+
 
 # Page configuration
 st.set_page_config(
