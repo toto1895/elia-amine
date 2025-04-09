@@ -15,11 +15,7 @@ import time
 import tempfile
 # Clear cache on startup
 st.cache_data.clear()
-import os
-import sys
 
-# Add the directory containing this script to the Python path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 # Page configuration
 st.set_page_config(
     page_title="Predico monitoring",
