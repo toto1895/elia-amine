@@ -405,7 +405,7 @@ def list_gcs_files(connection, prefix):
         return []
 
 # Application pages
-from PredictionClient import PredicoClient
+from predicoclient import PredicoClient
 
 def submission_viewer():
     """Display submission details and visualizations with proper authentication."""
