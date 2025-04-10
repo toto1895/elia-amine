@@ -799,7 +799,7 @@ def submission_viewer():
                                                             y=actual_data['mostRecentForecast'],
                                                             name="ELIA latest",
                                                             mode="lines",
-                                                            line=dict(color='lightblue', width=2, dash='solid')
+                                                            line=dict(color='purple', width=2, dash='solid')
                                                         )
                                                     )
                                             else:
@@ -836,7 +836,7 @@ def submission_viewer():
                                                             y=actual_data['latest elia forecast'],
                                                             name="ELIA latest",
                                                             mode="lines",
-                                                            line=dict(color='lightblue', width=2, dash='solid')
+                                                            line=dict(color='purple', width=2, dash='solid')
                                                         )
                                                     )
                                         
