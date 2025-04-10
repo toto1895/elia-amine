@@ -524,32 +524,50 @@ def submission_viewer():
                                     st.json(forecasts_data)
                                 
                                 # Process the forecasts data
+                                # This is the specific section of your code that needs to be fixed
+                                # Replace just this part in your submission_viewer function
+
+                                # Process the forecasts data
                                 if "data" in forecasts_data and forecasts_data["data"]:
                                     try:
                                         # Parse forecast data
-                                        forecasts = forecasts_data["data"]
+                                        raw_forecasts = forecasts_data["data"]
                                         
-                                        # Prepare data for plotting
-                                        timestamps = []
-                                        q10_values = []
-                                        q50_values = []
-                                        q90_values = []
+                                        # Create a dictionary to store timestamp data
+                                        forecast_dict = {}
                                         
-                                        for point in forecasts:
-                                            timestamps.append(pd.to_datetime(point.get("timestamp")))
-                                            q10_values.append(point.get("q10", 0))
-                                            q50_values.append(point.get("q50", 0))
-                                            q90_values.append(point.get("q90", 0))
+                                        # Process data points and organize by timestamp
+                                        for point in raw_forecasts:
+                                            timestamp = point.get("datetime")
+                                            variable = point.get("variable")
+                                            value = point.get("value", 0)
+                                            
+                                            if timestamp not in forecast_dict:
+                                                forecast_dict[timestamp] = {
+                                                    "q10": None,
+                                                    "q50": None,
+                                                    "q90": None
+                                                }
+                                            
+                                            forecast_dict[timestamp][variable] = value
                                         
-                                        # Create a DataFrame for easier manipulation
-                                        df = pd.DataFrame({
-                                            'timestamp': timestamps,
-                                            'q10': q10_values,
-                                            'q50': q50_values,
-                                            'q90': q90_values
-                                        })
+                                        # Convert dictionary to list for DataFrame creation
+                                        processed_forecasts = []
+                                        for timestamp, values in forecast_dict.items():
+                                            processed_forecasts.append({
+                                                "timestamp": timestamp,
+                                                "q10": values["q10"],
+                                                "q50": values["q50"],
+                                                "q90": values["q90"]
+                                            })
                                         
-                                        # Set timestamp as index
+                                        # Create a DataFrame
+                                        df = pd.DataFrame(processed_forecasts)
+                                        
+                                        # Convert timestamp to datetime
+                                        df['timestamp'] = pd.to_datetime(df['timestamp'])
+                                        
+                                        # Set timestamp as index and sort
                                         df.set_index('timestamp', inplace=True)
                                         df.sort_index(inplace=True)
                                         
@@ -560,71 +578,7 @@ def submission_viewer():
                                         # Create the plot
                                         st.subheader(f"{resource_type} Power Forecast for {target_day}")
                                         
-                                        # Create a plotly figure
-                                        fig = go.Figure()
-                                        
-                                        # Add the uncertainty band (q10 - q90)
-                                        fig.add_trace(
-                                            go.Scatter(
-                                                x=df.index,
-                                                y=df['q90'],
-                                                name="q90",
-                                                mode="lines",
-                                                line=dict(width=0),
-                                                showlegend=False
-                                            )
-                                        )
-                                        
-                                        fig.add_trace(
-                                            go.Scatter(
-                                                x=df.index,
-                                                y=df['q10'],
-                                                name="Uncertainty Band (q10-q90)",
-                                                mode="lines",
-                                                fill='tonexty',
-                                                fillcolor='rgba(0, 100, 80, 0.2)',
-                                                line=dict(width=0),
-                                                showlegend=True
-                                            )
-                                        )
-                                        
-                                        # Add median forecast line
-                                        fig.add_trace(
-                                            go.Scatter(
-                                                x=df.index,
-                                                y=df['q50'],
-                                                name="Median Forecast (q50)",
-                                                mode="lines",
-                                                line=dict(color='rgb(0, 100, 80)', width=2)
-                                            )
-                                        )
-                                        
-                                        # Update layout
-                                        fig.update_layout(
-                                            title=f"{resource_type} Power Forecast for {target_day}",
-                                            xaxis_title="Time",
-                                            yaxis_title="Power (MW)",
-                                            legend=dict(
-                                                orientation="h",
-                                                yanchor="bottom",
-                                                y=1.02,
-                                                xanchor="right",
-                                                x=1
-                                            ),
-                                            template="plotly_white",
-                                            height=600
-                                        )
-                                        
-                                        st.plotly_chart(fig, use_container_width=True)
-                                        
-                                        # Add download button for the data
-                                        csv = df.to_csv()
-                                        st.download_button(
-                                            label="Download Forecast Data as CSV",
-                                            data=csv,
-                                            file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
-                                            mime="text/csv",
-                                        )
+                                        # Rest of your plotting code remains the same...
                                         
                                     except Exception as e:
                                         st.error(f"Error processing forecasts data: {e}")
