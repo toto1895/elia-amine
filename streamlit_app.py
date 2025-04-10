@@ -725,7 +725,7 @@ def submission_viewer():
                                         
                                         # Create a plotly figure
                                         fig = go.Figure()
-                                        
+                                        df = df.tz_convert('CET')
                                         # Add the uncertainty band (q10 - q90)
                                         fig.add_trace(
                                             go.Scatter(
@@ -764,6 +764,7 @@ def submission_viewer():
                                         
                                         # Add actual data if available
                                         if actual_data is not None and not actual_data.empty:
+                                            actual_data = actual_data.tz_convert('CET')
                                             if resource_type == "Solar":
                                                 # For Solar data
                                                 # Add Elia Day-Ahead forecast
