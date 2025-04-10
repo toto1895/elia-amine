@@ -587,7 +587,7 @@ def submission_viewer():
                                         # Extract the date from the first timestamp for fetching actual data
                                         selected_date_str = (df.index[0]+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                                         selected_date_utc = pd.to_datetime(selected_date_str)
-                                        selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+                                        selected_date_end = selected_date_utc + pd.Timedelta(days=2) - pd.Timedelta(seconds=1)
                                         
                                         # Fetch actual solar data
                                         api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
@@ -617,7 +617,7 @@ def submission_viewer():
                                                 if has_tz:
                                                     # If forecast data is timezone-aware, make actual data timezone-aware
                                                     if actual_pv['Datetime'].dt.tz is None:
-                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize('UTC')
+                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize('CET')
                                                 else:
                                                     # If forecast data is timezone-naive, make actual data timezone-naive
                                                     if actual_pv['Datetime'].dt.tz is not None:
@@ -627,8 +627,8 @@ def submission_viewer():
                                                 
                                                 # Create timezone-consistent comparison dates
                                                 if has_tz and selected_date_utc.tzinfo is None:
-                                                    comparison_start = selected_date_utc.tz_localize('UTC')
-                                                    comparison_end = selected_date_end.tz_localize('UTC')
+                                                    comparison_start = selected_date_utc.tz_localize('CET')
+                                                    comparison_end = selected_date_end.tz_localize('CET')
                                                 elif not has_tz and selected_date_utc.tzinfo is not None:
                                                     comparison_start = selected_date_utc.tz_localize(None)
                                                     comparison_end = selected_date_end.tz_localize(None)
