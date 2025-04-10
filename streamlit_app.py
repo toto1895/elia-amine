@@ -700,14 +700,15 @@ def submission_viewer():
                                                 import traceback
                                                 st.error(traceback.format_exc())
                                         else:  # Wind resource type
-                                            st.info(f"Fetching actual wind data for: {selected_date_utc.strftime('%Y-%m-%d')}")
+                                            #st.info(f"Fetching actual wind data for: {selected_date_utc.strftime('%Y-%m-%d')}")
+
                                             
                                             try:
                                                 # Get cached wind data
                                                 actual_data = get_cached_actual(selected_date_utc-pd.Timedelta(days=1))
                                                 
                                                 if not actual_data.empty:
-                                                    st.success(f"Successfully loaded actual wind measurements for {len(actual_data)} time points")
+                                                    #st.success(f"Successfully loaded actual wind measurements for {len(actual_data)} time points")
                                                     
                                                     # Display actual data
                                                     with st.expander("Actual Wind Data", expanded=False):
@@ -790,6 +791,17 @@ def submission_viewer():
                                                             line=dict(color='white', width=2, dash='solid')
                                                         )
                                                     )
+
+                                                if 'mostRecentForecast' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['mostRecentForecast'],
+                                                            name="ELIA latest",
+                                                            mode="lines",
+                                                            line=dict(color='lightblue', width=2, dash='solid')
+                                                        )
+                                                    )
                                             else:
                                                 # For Wind data
                                                 # Add Elia Day-Ahead forecast
@@ -813,6 +825,18 @@ def submission_viewer():
                                                             name="Actual Measurements",
                                                             mode="lines",
                                                             line=dict(color='white', width=2, dash='solid')
+                                                        )
+                                                    )
+
+
+                                                if 'latest elia forecast' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['latest elia forecast'],
+                                                            name="ELIA latest",
+                                                            mode="lines",
+                                                            line=dict(color='lightblue', width=2, dash='solid')
                                                         )
                                                     )
                                         
