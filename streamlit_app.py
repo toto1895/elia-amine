@@ -525,7 +525,7 @@ def submission_viewer():
                                 try:
                                     st.write("Submission Scores")
                                     url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
-                                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client._headers())
+                                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers())
                                     sc_data = sc_resp.json()["data"]["personal_metrics"]
                                     df_scores = pd.DataFrame(sc_data)
                                     
