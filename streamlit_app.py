@@ -585,7 +585,7 @@ def submission_viewer():
                                             st.dataframe(df)
                                         
                                         # Extract the date from the first timestamp for fetching actual data
-                                        selected_date_str = df.index[0].strftime("%Y-%m-%d")
+                                        selected_date_str = (df.index[0]+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                                         selected_date_utc = pd.to_datetime(selected_date_str)
                                         selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                                         
