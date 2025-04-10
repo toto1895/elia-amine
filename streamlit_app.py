@@ -587,7 +587,7 @@ def submission_viewer():
                                         # Extract the date from the first timestamp for fetching actual data
                                         selected_date_str = (df.index[0]+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                                         selected_date_utc = pd.to_datetime(selected_date_str)
-                                        selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+                                        selected_date_end = selected_date_utc + pd.Timedelta(days=2) - pd.Timedelta(seconds=1)
                                         
                                         # Fetch actual solar data
                                         api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
