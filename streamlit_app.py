@@ -523,9 +523,7 @@ def submission_viewer():
                                 with st.expander("Raw Forecasts Data", expanded=False):
                                     st.json(forecasts_data)
                                 
-                                # Process the forecasts data
-                                # This is the specific section of your code that needs to be fixed
-                                # Replace just this part in your submission_viewer function
+                                # Modified data processing section for your Streamlit app
 
                                 # Process the forecasts data
                                 if "data" in forecasts_data and forecasts_data["data"]:
@@ -533,36 +531,40 @@ def submission_viewer():
                                         # Parse forecast data
                                         raw_forecasts = forecasts_data["data"]
                                         
-                                        # Create a dictionary to store timestamp data
-                                        forecast_dict = {}
+                                        # Create dictionaries to store values by timestamp for each variable
+                                        q10_dict = {}
+                                        q50_dict = {}
+                                        q90_dict = {}
                                         
-                                        # Process data points and organize by timestamp
+                                        # Process data points and organize by variable and timestamp
                                         for point in raw_forecasts:
                                             timestamp = point.get("datetime")
                                             variable = point.get("variable")
-                                            value = point.get("value", 0)
+                                            value = point.get("value")
                                             
-                                            if timestamp not in forecast_dict:
-                                                forecast_dict[timestamp] = {
-                                                    "q10": None,
-                                                    "q50": None,
-                                                    "q90": None
-                                                }
-                                            
-                                            forecast_dict[timestamp][variable] = value
+                                            # Store each value in the appropriate dictionary
+                                            if variable == "q10":
+                                                q10_dict[timestamp] = value
+                                            elif variable == "q50":
+                                                q50_dict[timestamp] = value
+                                            elif variable == "q90":
+                                                q90_dict[timestamp] = value
                                         
-                                        # Convert dictionary to list for DataFrame creation
-                                        processed_forecasts = []
-                                        for timestamp, values in forecast_dict.items():
-                                            processed_forecasts.append({
-                                                "timestamp": timestamp,
-                                                "q10": values["q10"],
-                                                "q50": values["q50"],
-                                                "q90": values["q90"]
+                                        # Get all unique timestamps
+                                        all_timestamps = sorted(set(q10_dict.keys()) | set(q50_dict.keys()) | set(q90_dict.keys()))
+                                        
+                                        # Create a DataFrame with all data
+                                        data_rows = []
+                                        for ts in all_timestamps:
+                                            data_rows.append({
+                                                "timestamp": ts,
+                                                "q10": q10_dict.get(ts, None),
+                                                "q50": q50_dict.get(ts, None),
+                                                "q90": q90_dict.get(ts, None)
                                             })
                                         
                                         # Create a DataFrame
-                                        df = pd.DataFrame(processed_forecasts)
+                                        df = pd.DataFrame(data_rows)
                                         
                                         # Convert timestamp to datetime
                                         df['timestamp'] = pd.to_datetime(df['timestamp'])
@@ -571,14 +573,84 @@ def submission_viewer():
                                         df.set_index('timestamp', inplace=True)
                                         df.sort_index(inplace=True)
                                         
+                                        # Log some information to verify data is being processed correctly
+                                        st.write(f"Total timestamps: {len(df)}")
+                                        st.write(f"Non-zero q10 values: {(df['q10'] > 0).sum()}")
+                                        st.write(f"Non-zero q50 values: {(df['q50'] > 0).sum()}")
+                                        st.write(f"Non-zero q90 values: {(df['q90'] > 0).sum()}")
+                                        
                                         # Display dataframe
-                                        with st.expander("Forecast Data Table", expanded=False):
+                                        with st.expander("Forecast Data Table", expanded=True):
                                             st.dataframe(df)
                                         
                                         # Create the plot
                                         st.subheader(f"{resource_type} Power Forecast for {target_day}")
                                         
-                                        # Rest of your plotting code remains the same...
+                                        # Create a plotly figure
+                                        fig = go.Figure()
+                                        
+                                        # Add the uncertainty band (q10 - q90)
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q90'],
+                                                name="q90",
+                                                mode="lines",
+                                                line=dict(width=0),
+                                                showlegend=False
+                                            )
+                                        )
+                                        
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q10'],
+                                                name="Uncertainty Band (q10-q90)",
+                                                mode="lines",
+                                                fill='tonexty',
+                                                fillcolor='rgba(0, 100, 80, 0.2)',
+                                                line=dict(width=0),
+                                                showlegend=True
+                                            )
+                                        )
+                                        
+                                        # Add median forecast line
+                                        fig.add_trace(
+                                            go.Scatter(
+                                                x=df.index,
+                                                y=df['q50'],
+                                                name="Median Forecast (q50)",
+                                                mode="lines",
+                                                line=dict(color='rgb(0, 100, 80)', width=2)
+                                            )
+                                        )
+                                        
+                                        # Update layout
+                                        fig.update_layout(
+                                            title=f"{resource_type} Power Forecast for {target_day}",
+                                            xaxis_title="Time",
+                                            yaxis_title="Power (MW)",
+                                            legend=dict(
+                                                orientation="h",
+                                                yanchor="bottom",
+                                                y=1.02,
+                                                xanchor="right",
+                                                x=1
+                                            ),
+                                            template="plotly_white",
+                                            height=600
+                                        )
+                                        
+                                        st.plotly_chart(fig, use_container_width=True)
+                                        
+                                        # Add download button for the data
+                                        csv = df.to_csv()
+                                        st.download_button(
+                                            label="Download Forecast Data as CSV",
+                                            data=csv,
+                                            file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
+                                            mime="text/csv",
+                                        )
                                         
                                     except Exception as e:
                                         st.error(f"Error processing forecasts data: {e}")
