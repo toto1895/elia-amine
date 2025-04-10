@@ -693,7 +693,7 @@ def submission_viewer():
                                             
                                             try:
                                                 # Get cached wind data
-                                                actual_data = get_cached_actual(selected_date_utc)
+                                                actual_data = get_cached_actual(selected_date_utc-pd.Timedelta(days=1))
                                                 
                                                 if not actual_data.empty:
                                                     st.success(f"Successfully loaded actual wind measurements for {len(actual_data)} time points")
