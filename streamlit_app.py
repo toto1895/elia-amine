@@ -526,11 +526,7 @@ def submission_viewer():
                                     sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
                                     sc_data = sc_resp.json()["data"]["personal_metrics"]
                                     df_scores = pd.DataFrame(sc_data)
-                                    
-                                    # Add 'market_date' as day after submission_time
-                                    #submission_time = pd.to_datetime(df_scores["submission_time"].iloc[0]) if not df_scores.empty else pd.Timestamp.now()
-                                    #df_scores["market_date"] = (submission_time + pd.Timedelta(days=1)).date()
-                                    
+
                                     # Display scores
                                     if not df_scores.empty:
                                         st.dataframe(df_scores)
@@ -1830,15 +1826,15 @@ def main():
     if st.sidebar.button("Generate forecast"):
         run_forecast_job()
 
-    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "Overview", "Benchmark", "Solar View"])
+    page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "PnL", "wind models", "solar models"])
     
     if page_choice == "Submission Viewer":
         submission_viewer()
-    elif page_choice == "Overview":
+    elif page_choice == "PnL":
         overview()
-    elif page_choice == "Benchmark":
+    elif page_choice == "wind models":
         benchmark()
-    elif page_choice == "Solar View":
+    elif page_choice == "solar models":
         solar_view()
 
 
