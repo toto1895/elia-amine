@@ -607,11 +607,38 @@ def submission_viewer():
                                                 
                                                 # Convert timestamp string to datetime
                                                 actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
+                                                
+                                                # Check if the index has timezone info
+                                                has_tz = False
+                                                if not df.index.empty:
+                                                    has_tz = df.index[0].tzinfo is not None
+                                                
+                                                # Make the timestamps timezone-aware or timezone-naive to match the forecast data
+                                                if has_tz:
+                                                    # If forecast data is timezone-aware, make actual data timezone-aware
+                                                    if actual_pv['Datetime'].dt.tz is None:
+                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize('UTC')
+                                                else:
+                                                    # If forecast data is timezone-naive, make actual data timezone-naive
+                                                    if actual_pv['Datetime'].dt.tz is not None:
+                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize(None)
+                                                
                                                 actual_pv = actual_pv.set_index('Datetime')
                                                 
+                                                # Create timezone-consistent comparison dates
+                                                if has_tz and selected_date_utc.tzinfo is None:
+                                                    comparison_start = selected_date_utc.tz_localize('UTC')
+                                                    comparison_end = selected_date_end.tz_localize('UTC')
+                                                elif not has_tz and selected_date_utc.tzinfo is not None:
+                                                    comparison_start = selected_date_utc.tz_localize(None)
+                                                    comparison_end = selected_date_end.tz_localize(None)
+                                                else:
+                                                    comparison_start = selected_date_utc
+                                                    comparison_end = selected_date_end
+                                                
                                                 # Filter to match our date range
-                                                actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
-                                                                    (actual_pv.index <= selected_date_end)]
+                                                actual_pv = actual_pv[(actual_pv.index >= comparison_start) & 
+                                                                    (actual_pv.index <= comparison_end)]
                                                 
                                                 if not actual_pv.empty:
                                                     st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
@@ -622,9 +649,9 @@ def submission_viewer():
                                                         st.dataframe(actual_data)
                                             else:
                                                 st.warning(f"Could not fetch actual data: HTTP {response.status_code}")
-                                        
+
                                         except Exception as e:
-                                            st.error(f"Error fetching actual solar data: {e}")
+                                            st.error(f"Error fetching actual solar data: {str(e)}")
                                             import traceback
                                             st.error(traceback.format_exc())
                                         
@@ -697,7 +724,6 @@ def submission_viewer():
                                         
                                         
                                         st.plotly_chart(fig, use_container_width=True)
-
                                         
                                     except Exception as e:
                                         st.error(f"Error processing forecasts data: {e}")
