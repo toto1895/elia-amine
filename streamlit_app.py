@@ -487,7 +487,7 @@ def submission_viewer():
                 session_id = selected_session["id"]
                 
                 # Display basic session info
-                st.info(f"Selected Market Session ID: {session_id}")
+                #st.info(f"Selected Market Session ID: {session_id}")
                 
                 # Resource selector (radio button)
                 resource_options = {
