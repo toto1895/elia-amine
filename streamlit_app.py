@@ -518,9 +518,8 @@ def submission_viewer():
                             forecasts_data = client.get_forecasts(challenge_id)
                             
                             if forecasts_data:
-                                # Display raw response in expandable section
-                                with st.expander("Raw Forecasts Data", expanded=False):
-                                    st.json(forecasts_data)
+                            #    with st.expander("Raw Forecasts Data", expanded=False):
+                            #        st.json(forecasts_data)
                                 
                                 try:
                                     st.write("Submission Scores")
