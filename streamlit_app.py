@@ -489,9 +489,10 @@ def submission_viewer():
                 # Display basic session info
                 st.info(f"Selected Market Session ID: {session_id}")
                 
+
                 # Resource selector (radio button)
                 resource_options = {
-                    "Solar": "491949aa-8662-4010-8a29-75f4267a76c2",
+                    "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
                     "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
                 }
                 resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
