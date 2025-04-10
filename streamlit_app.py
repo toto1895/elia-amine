@@ -715,6 +715,15 @@ def submission_viewer():
                                                 fig.add_trace(
                                                     go.Scatter(
                                                         x=actual_data.index,
+                                                        y=actual_data['dayAheadForecast'],
+                                                        name="ELIA DA",
+                                                        mode="lines",
+                                                        line=dict(color='darkorange', width=2)
+                                                    )
+                                                )
+                                                fig.add_trace(
+                                                    go.Scatter(
+                                                        x=actual_data.index,
                                                         y=actual_values,
                                                         name="Actual Measurements",
                                                         mode="lines",
