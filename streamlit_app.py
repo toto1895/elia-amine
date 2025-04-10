@@ -523,9 +523,9 @@ def submission_viewer():
                                     st.json(forecasts_data)
                                 
                                 try:
-                                    st.subheader("Submission Scores")
+                                    st.write("Submission Scores")
                                     url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
-                                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client._api._headers())
+                                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client._headers())
                                     sc_data = sc_resp.json()["data"]["personal_metrics"]
                                     df_scores = pd.DataFrame(sc_data)
                                     
@@ -538,8 +538,8 @@ def submission_viewer():
                                         st.dataframe(df_scores)
                                     else:
                                         st.info("No submission scores available for this challenge.")
-                                except:
-                                    pass
+                                except Exception as e:
+                                    st.warning(f"Could not fetch submission scores: {str(e)}")
                                         
 
                                 # Process the forecasts data
