@@ -906,7 +906,8 @@ def submission_viewer():
                                                             st.metric("Median Forecast RMSE", f"{metrics['Median Forecast RMSE']:.2f}")
                                                         else:
                                                             st.info("Could not calculate Median Forecast RMSE (insufficient data)")
-                                                    
+                                                
+                                                
                                                     with col3:
                                                         if "ELIA Latest Forecast RMSE" in metrics:
                                                             st.metric("ELIA latest RMSE", f"{metrics['ELIA latest RMSE']:.2f}")
