@@ -522,8 +522,25 @@ def submission_viewer():
                                 with st.expander("Raw Forecasts Data", expanded=False):
                                     st.json(forecasts_data)
                                 
-                                # Modified data processing section for your Streamlit app
-                                # Complete integrated data processing section for your Streamlit app
+                                try:
+                                    st.subheader("Submission Scores")
+                                    url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
+                                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client._api._headers())
+                                    sc_data = sc_resp.json()["data"]["personal_metrics"]
+                                    df_scores = pd.DataFrame(sc_data)
+                                    
+                                    # Add 'market_date' as day after submission_time
+                                    submission_time = pd.to_datetime(df_scores["submission_time"].iloc[0]) if not df_scores.empty else pd.Timestamp.now()
+                                    df_scores["market_date"] = (submission_time + pd.Timedelta(days=1)).date()
+                                    
+                                    # Display scores
+                                    if not df_scores.empty:
+                                        st.dataframe(df_scores)
+                                    else:
+                                        st.info("No submission scores available for this challenge.")
+                                except:
+                                    pass
+                                        
 
                                 # Process the forecasts data
                                 if "data" in forecasts_data and forecasts_data["data"]:
