@@ -587,7 +587,7 @@ def submission_viewer():
                                         # Extract the date from the first timestamp for fetching actual data
                                         selected_date_str = (df.index[0]+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                                         selected_date_utc = pd.to_datetime(selected_date_str)
-                                        selected_date_end = selected_date_utc + pd.Timedelta(days=2) - pd.Timedelta(seconds=1)
+                                        selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                                         
                                         # Fetch actual solar data
                                         api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
@@ -603,7 +603,7 @@ def submission_viewer():
                                                 solar_data = response.json()
                                                 
                                                 # Convert the JSON data to a pandas DataFrame
-                                                actual_pv = pd.DataFrame(solar_data)
+                                                actual_pv = pd.DataFrame(solar_data).iloc[:96]
                                                 
                                                 # Convert timestamp string to datetime
                                                 actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
@@ -727,7 +727,7 @@ def submission_viewer():
                                                         y=actual_values,
                                                         name="Actual Measurements",
                                                         mode="lines",
-                                                        line=dict(color='rgb(200, 0, 0)', width=2, dash='dot')
+                                                        line=dict(color='white', width=2, dash='line')
                                                     )
                                                 )
                                         
