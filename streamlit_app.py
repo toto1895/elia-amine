@@ -590,7 +590,7 @@ def submission_viewer():
                                         selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                                         
                                         # Fetch actual solar data
-                                        api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_utc.strftime("%Y-%m-%d")}&sourceID=1'
+                                        api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
                                                 
                                         st.info(f"Fetching actual solar data from: {api_url}")
                                         
