@@ -524,6 +524,7 @@ def submission_viewer():
                                     st.json(forecasts_data)
                                 
                                 # Modified data processing section for your Streamlit app
+                                # Complete integrated data processing section for your Streamlit app
 
                                 # Process the forecasts data
                                 if "data" in forecasts_data and forecasts_data["data"]:
@@ -574,14 +575,58 @@ def submission_viewer():
                                         df.sort_index(inplace=True)
                                         
                                         # Log some information to verify data is being processed correctly
-                                        st.write(f"Total timestamps: {len(df)}")
+                                        st.write(f"Total forecast timestamps: {len(df)}")
                                         st.write(f"Non-zero q10 values: {(df['q10'] > 0).sum()}")
                                         st.write(f"Non-zero q50 values: {(df['q50'] > 0).sum()}")
                                         st.write(f"Non-zero q90 values: {(df['q90'] > 0).sum()}")
                                         
                                         # Display dataframe
-                                        with st.expander("Forecast Data Table", expanded=True):
+                                        with st.expander("Forecast Data Table", expanded=False):
                                             st.dataframe(df)
+                                        
+                                        # Extract the date from the first timestamp for fetching actual data
+                                        selected_date_str = df.index[0].strftime("%Y-%m-%d")
+                                        selected_date_utc = pd.to_datetime(selected_date_str)
+                                        selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
+                                        
+                                        # Fetch actual solar data
+                                        api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_utc.strftime("%Y-%m-%d")}&sourceID=1'
+                                                
+                                        st.info(f"Fetching actual solar data from: {api_url}")
+                                        
+                                        try:
+                                            # Read the JSON data
+                                            response = requests.get(api_url)
+                                            actual_data = None
+                                            
+                                            if response.status_code == 200:
+                                                solar_data = response.json()
+                                                
+                                                # Convert the JSON data to a pandas DataFrame
+                                                actual_pv = pd.DataFrame(solar_data)
+                                                
+                                                # Convert timestamp string to datetime
+                                                actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
+                                                actual_pv = actual_pv.set_index('Datetime')
+                                                
+                                                # Filter to match our date range
+                                                actual_pv = actual_pv[(actual_pv.index >= selected_date_utc) & 
+                                                                    (actual_pv.index <= selected_date_end)]
+                                                
+                                                if not actual_pv.empty:
+                                                    st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
+                                                    actual_data = actual_pv
+                                                    
+                                                    # Display actual data
+                                                    with st.expander("Actual Solar Data", expanded=False):
+                                                        st.dataframe(actual_data)
+                                            else:
+                                                st.warning(f"Could not fetch actual data: HTTP {response.status_code}")
+                                        
+                                        except Exception as e:
+                                            st.error(f"Error fetching actual solar data: {e}")
+                                            import traceback
+                                            st.error(traceback.format_exc())
                                         
                                         # Create the plot
                                         st.subheader(f"{resource_type} Power Forecast for {target_day}")
@@ -625,6 +670,32 @@ def submission_viewer():
                                             )
                                         )
                                         
+                                        # Add actual data if available
+                                        if actual_data is not None:
+                                            # Reformat the actual data if needed - you may need to adjust this based on your actual data structure
+                                            if 'actual' in actual_data.columns:
+                                                actual_values = actual_data['actual']
+                                            elif 'power' in actual_data.columns:
+                                                actual_values = actual_data['power']
+                                            else:
+                                                # Use the first numeric column if column name is unknown
+                                                numeric_cols = actual_data.select_dtypes(include=['number']).columns
+                                                if len(numeric_cols) > 0:
+                                                    actual_values = actual_data[numeric_cols[0]]
+                                                else:
+                                                    actual_values = None
+                                            
+                                            if actual_values is not None:
+                                                fig.add_trace(
+                                                    go.Scatter(
+                                                        x=actual_data.index,
+                                                        y=actual_values,
+                                                        name="Actual Measurements",
+                                                        mode="lines",
+                                                        line=dict(color='rgb(200, 0, 0)', width=2, dash='dot')
+                                                    )
+                                                )
+                                        
                                         # Update layout
                                         fig.update_layout(
                                             title=f"{resource_type} Power Forecast for {target_day}",
@@ -643,14 +714,59 @@ def submission_viewer():
                                         
                                         st.plotly_chart(fig, use_container_width=True)
                                         
-                                        # Add download button for the data
-                                        csv = df.to_csv()
-                                        st.download_button(
-                                            label="Download Forecast Data as CSV",
-                                            data=csv,
-                                            file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
-                                            mime="text/csv",
-                                        )
+                                        # Create a merged dataset with both forecast and actual data
+                                        if actual_data is not None:
+                                            try:
+                                                # Create a merged dataframe
+                                                merged_df = df.copy()
+                                                
+                                                # Find the column with actual values
+                                                if 'actual' in actual_data.columns:
+                                                    actual_column = 'actual'
+                                                elif 'power' in actual_data.columns:
+                                                    actual_column = 'power'
+                                                else:
+                                                    # Use the first numeric column if column name is unknown
+                                                    numeric_cols = actual_data.select_dtypes(include=['number']).columns
+                                                    if len(numeric_cols) > 0:
+                                                        actual_column = numeric_cols[0]
+                                                    else:
+                                                        actual_column = None
+                                                
+                                                if actual_column is not None:
+                                                    # Add actual values column to merged dataframe
+                                                    merged_df['actual'] = pd.Series(dtype='float64')
+                                                    
+                                                    # Match timestamps and fill with actual values
+                                                    for idx in merged_df.index:
+                                                        if idx in actual_data.index:
+                                                            merged_df.at[idx, 'actual'] = actual_data.at[idx, actual_column]
+                                                    
+                                                    # Display merged data
+                                                    with st.expander("Merged Forecast and Actual Data", expanded=True):
+                                                        st.dataframe(merged_df)
+                                                    
+                                                    # Add download button for the merged data
+                                                    merged_csv = merged_df.to_csv()
+                                                    st.download_button(
+                                                        label="Download Merged Data as CSV",
+                                                        data=merged_csv,
+                                                        file_name=f"{resource_type.lower()}_forecast_and_actual_{target_day}.csv",
+                                                        mime="text/csv",
+                                                    )
+                                            except Exception as e:
+                                                st.error(f"Error merging forecast and actual data: {e}")
+                                                import traceback
+                                                st.error(traceback.format_exc())
+                                        else:
+                                            # Just download the forecast data if no actual data is available
+                                            csv = df.to_csv()
+                                            st.download_button(
+                                                label="Download Forecast Data as CSV",
+                                                data=csv,
+                                                file_name=f"{resource_type.lower()}_forecast_{target_day}.csv",
+                                                mime="text/csv",
+                                            )
                                         
                                     except Exception as e:
                                         st.error(f"Error processing forecasts data: {e}")
@@ -658,6 +774,7 @@ def submission_viewer():
                                         st.error(traceback.format_exc())
                                 else:
                                     st.warning("No forecasts data available for this challenge and user.")
+
                     else:
                         st.warning(f"No challenges found for market session {session_id} and resource {resource_type}")
                 
