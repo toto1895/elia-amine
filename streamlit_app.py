@@ -443,7 +443,7 @@ def submission_viewer():
         else:
             # Show user info and logout button when logged in
             st.success(f"Logged in as: {st.session_state.predico_client.email}")
-            st.info(f"User ID: {st.session_state.predico_client.user_id}")
+            #st.info(f"User ID: {st.session_state.predico_client.user_id}")
             
             if st.button("Logout"):
                 st.session_state.predico_client = None
@@ -585,8 +585,8 @@ def submission_viewer():
                                         df.sort_index(inplace=True)
                                         
                                         # Display dataframe
-                                        with st.expander("Forecast Data Table", expanded=False):
-                                            st.dataframe(df)
+                                       # with st.expander("Forecast Data Table", expanded=False):
+                                       #     st.dataframe(df)
                                         
                                         # Extract the date from the first timestamp for fetching actual data
                                         selected_date_str = (df.index[0]+pd.Timedelta(days=1)).strftime("%Y-%m-%d")
@@ -638,7 +638,7 @@ def submission_viewer():
                                             # Fetch actual solar data
                                             api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
                                                     
-                                            st.info(f"Fetching actual solar data from: {api_url}")
+                                            #st.info(f"Fetching actual solar data from: {api_url}")
                                             
                                             try:
                                                 # Read the JSON data
@@ -686,7 +686,7 @@ def submission_viewer():
                                                                         (actual_pv.index <= comparison_end)]
                                                     
                                                     if not actual_pv.empty:
-                                                        st.success(f"Successfully loaded actual solar measurements for {len(actual_pv)} time points")
+                                                        #st.success(f"Successfully loaded actual solar measurements for {len(actual_pv)} time points")
                                                         actual_data = actual_pv
                                                         
                                                         # Display actual data
@@ -1892,8 +1892,9 @@ def solar_view():
 def main():
     st.sidebar.title("Navigation")
     
-    if st.sidebar.button("Generate forecast"):
-        run_forecast_job()
+    if st.session_state.is_authenticated and st.session_state.predico_client:
+        if st.sidebar.button("Generate forecast"):
+            run_forecast_job()
 
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "PnL", "wind models", "solar models"])
     
