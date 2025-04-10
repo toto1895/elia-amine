@@ -871,7 +871,7 @@ def submission_viewer():
                                                     elia_da_values = actual_data.loc[common_index, elia_col]
                                                     elia_latest_values = actual_data.loc[common_index, latest_col]
                                                     
-                                                    
+
                                                     # Align forecast data with the same index
                                                     forecast_values = df.loc[common_index, 'q50']
                                                     
@@ -1934,9 +1934,12 @@ def solar_view():
 def main():
     st.sidebar.title("Navigation")
     
-    if st.session_state.is_authenticated and st.session_state.predico_client:
-        if st.sidebar.button("Generate forecast"):
-            run_forecast_job()
+    try:
+        if st.session_state.is_authenticated and st.session_state.predico_client:
+            if st.sidebar.button("Generate forecast"):
+                run_forecast_job()
+    except:
+        pass
 
     page_choice = st.sidebar.radio("Go to page:", ["Submission Viewer", "PnL", "wind models", "solar models"])
     
