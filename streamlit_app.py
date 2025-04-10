@@ -818,6 +818,75 @@ def submission_viewer():
                                         
                                         st.plotly_chart(fig, use_container_width=True)
                                         
+                                        # Calculate RMSE for actual vs forecasts
+                                        if actual_data is not None and not actual_data.empty:
+                                            st.subheader("Forecast Accuracy Metrics")
+                                            
+                                            # Prepare a merged dataframe for RMSE calculation
+                                            if resource_type == "Solar":
+                                                actual_col = 'realTime'
+                                                elia_col = 'dayAheadForecast'
+                                            else:  # Wind
+                                                actual_col = 'actual'
+                                                elia_col = 'DA elia (11AM)'
+                                            
+                                            # Check if required columns exist
+                                            if actual_col in actual_data.columns and elia_col in actual_data.columns:
+                                                # Create a common timestamp index for comparison
+                                                common_index = sorted(set(df.index).intersection(set(actual_data.index)))
+                                                
+                                                if common_index:
+                                                    # Initialize metrics container
+                                                    metrics = {}
+                                                    
+                                                    # Prepare data for comparison
+                                                    actual_values = actual_data.loc[common_index, actual_col]
+                                                    elia_da_values = actual_data.loc[common_index, elia_col]
+                                                    
+                                                    # Align forecast data with the same index
+                                                    forecast_values = df.loc[common_index, 'q50']
+                                                    
+                                                    # Calculate RMSE
+                                                    import numpy as np
+                                                    
+                                                    # RMSE for ELIA DA vs Actual
+                                                    if not np.isnan(actual_values).all() and not np.isnan(elia_da_values).all():
+                                                        elia_rmse = np.sqrt(np.nanmean((elia_da_values - actual_values)**2))
+                                                        metrics["ELIA DA RMSE"] = elia_rmse
+                                                    
+                                                    # RMSE for Median Forecast vs Actual
+                                                    if not np.isnan(actual_values).all() and not np.isnan(forecast_values).all():
+                                                        forecast_rmse = np.sqrt(np.nanmean((forecast_values - actual_values)**2))
+                                                        metrics["Median Forecast RMSE"] = forecast_rmse
+                                                    
+                                                    # Display metrics
+                                                    col1, col2 = st.columns(2)
+                                                    
+                                                    with col1:
+                                                        if "ELIA DA RMSE" in metrics:
+                                                            st.metric("ELIA DA RMSE", f"{metrics['ELIA DA RMSE']:.2f}")
+                                                        else:
+                                                            st.info("Could not calculate ELIA DA RMSE (insufficient data)")
+                                                            
+                                                    with col2:
+                                                        if "Median Forecast RMSE" in metrics:
+                                                            st.metric("Median Forecast RMSE", f"{metrics['Median Forecast RMSE']:.2f}")
+                                                        else:
+                                                            st.info("Could not calculate Median Forecast RMSE (insufficient data)")
+                                                    
+                                                    # Display improvement percentage if both metrics are available
+                                                    if "ELIA DA RMSE" in metrics and "Median Forecast RMSE" in metrics:
+                                                        improvement = (metrics["ELIA DA RMSE"] - metrics["Median Forecast RMSE"]) / metrics["ELIA DA RMSE"] * 100
+                                                        if improvement > 0:
+                                                            st.success(f"Your forecast is {improvement:.2f}% better than ELIA's day-ahead forecast")
+                                                        else:
+                                                            st.warning(f"Your forecast is {abs(improvement):.2f}% worse than ELIA's day-ahead forecast")
+                                                
+                                                else:
+                                                    st.warning("No overlapping timestamps between forecast and actual data for RMSE calculation")
+                                            else:
+                                                st.warning(f"Missing required columns for RMSE calculation: {actual_col} and/or {elia_col}")
+                                        
                                     except Exception as e:
                                         st.error(f"Error processing forecasts data: {e}")
                                         import traceback
