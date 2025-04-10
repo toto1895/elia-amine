@@ -851,9 +851,11 @@ def submission_viewer():
                                             if resource_type == "Solar":
                                                 actual_col = 'realTime'
                                                 elia_col = 'dayAheadForecast'
+                                                latest_col = 'mostRecentForecast'
                                             else:  # Wind
                                                 actual_col = 'actual'
                                                 elia_col = 'DA elia (11AM)'
+                                                latest_col = 'latest elia forecast'
                                             
                                             # Check if required columns exist
                                             if actual_col in actual_data.columns and elia_col in actual_data.columns:
@@ -867,6 +869,7 @@ def submission_viewer():
                                                     # Prepare data for comparison
                                                     actual_values = actual_data.loc[common_index, actual_col]
                                                     elia_da_values = actual_data.loc[common_index, elia_col]
+                                                    elia_latest_values = actual_data.loc[common_index, latest_col]
                                                     
                                                     # Align forecast data with the same index
                                                     forecast_values = df.loc[common_index, 'q50']
@@ -884,8 +887,13 @@ def submission_viewer():
                                                         forecast_rmse = np.sqrt(np.nanmean((forecast_values - actual_values)**2))
                                                         metrics["Median Forecast RMSE"] = forecast_rmse
                                                     
+                                                    # RMSE for Median Forecast vs Actual
+                                                    if not np.isnan(actual_values).all() and not np.isnan(elia_latest_values).all():
+                                                        forecast_rmse = np.sqrt(np.nanmean((elia_latest_values - actual_values)**2))
+                                                        metrics["ELIA latest RMSE"] = forecast_rmse
+                                                    
                                                     # Display metrics
-                                                    col1, col2 = st.columns(2)
+                                                    col1, col2, col3 = st.columns(3)
                                                     
                                                     with col1:
                                                         if "ELIA DA RMSE" in metrics:
@@ -899,6 +907,14 @@ def submission_viewer():
                                                         else:
                                                             st.info("Could not calculate Median Forecast RMSE (insufficient data)")
                                                     
+                                                    with col3:
+                                                        if "ELIA Latest Forecast RMSE" in metrics:
+                                                            st.metric("ELIA latest RMSE", f"{metrics['ELIA latest RMSE']:.2f}")
+                                                        else:
+                                                            st.info("Could not calculate ELIA latest RMSE (insufficient data)")
+                                                    
+
+
                                                     # Display improvement percentage if both metrics are available
                                                     if "ELIA DA RMSE" in metrics and "Median Forecast RMSE" in metrics:
                                                         improvement = (metrics["ELIA DA RMSE"] - metrics["Median Forecast RMSE"]) / metrics["ELIA DA RMSE"] * 100
