@@ -471,8 +471,8 @@ def submission_viewer():
                 # Create labels for the sessions
                 session_labels = {}
                 for session in market_sessions:
-                    open_date = pd.to_datetime(session["open_ts"]).strftime("%Y-%m-%d")
-                    forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    open_date = pd.to_datetime(session["open_ts"]).tz_convert('CET').strftime("%Y-%m-%d")
+                    forecast_date = (pd.to_datetime(session["open_ts"]).tz_convert('CET') + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
                     label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
                     session_labels[label] = session
                 
@@ -573,12 +573,6 @@ def submission_viewer():
                                         # Set timestamp as index and sort
                                         df.set_index('timestamp', inplace=True)
                                         df.sort_index(inplace=True)
-                                        
-                                        # Log some information to verify data is being processed correctly
-                                        st.write(f"Total forecast timestamps: {len(df)}")
-                                        st.write(f"Non-zero q10 values: {(df['q10'] > 0).sum()}")
-                                        st.write(f"Non-zero q50 values: {(df['q50'] > 0).sum()}")
-                                        st.write(f"Non-zero q90 values: {(df['q90'] > 0).sum()}")
                                         
                                         # Display dataframe
                                         with st.expander("Forecast Data Table", expanded=False):
