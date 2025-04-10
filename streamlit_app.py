@@ -528,8 +528,8 @@ def submission_viewer():
                                     df_scores = pd.DataFrame(sc_data)
                                     
                                     # Add 'market_date' as day after submission_time
-                                    submission_time = pd.to_datetime(df_scores["submission_time"].iloc[0]) if not df_scores.empty else pd.Timestamp.now()
-                                    df_scores["market_date"] = (submission_time + pd.Timedelta(days=1)).date()
+                                    #submission_time = pd.to_datetime(df_scores["submission_time"].iloc[0]) if not df_scores.empty else pd.Timestamp.now()
+                                    #df_scores["market_date"] = (submission_time + pd.Timedelta(days=1)).date()
                                     
                                     # Display scores
                                     if not df_scores.empty:
