@@ -73,7 +73,7 @@ class PredicoClient:
                     "Authorization": f"Bearer {self.access_token}",
                     "Connection": "keep-alive",
                     "Host": "predico-elia.inesctec.pt",
-                    "Referer": "https://predico-elia.inesctec.pt/sessions",
+                    #"Referer": "https://predico-elia.inesctec.pt/sessions",
                     "Sec-Fetch-Dest": "empty",
                     "Sec-Fetch-Mode": "cors",
                     "Sec-Fetch-Site": "same-origin",

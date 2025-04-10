@@ -510,7 +510,6 @@ def submission_viewer():
                         # Get the challenge ID from the response
                         challenge_id = challenges[0]["id"]
                         target_day = challenges[0]["target_day"]
-                        st.success(f"Forecasting for target day: {target_day}")
                         
                         # Step 3: Fetch forecasts for the selected challenge
                         with st.spinner(f"Fetching forecasts for challenge {challenge_id}..."):
