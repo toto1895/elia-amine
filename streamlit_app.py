@@ -871,6 +871,7 @@ def submission_viewer():
                                                     elia_da_values = actual_data.loc[common_index, elia_col]
                                                     elia_latest_values = actual_data.loc[common_index, latest_col]
                                                     
+                                                    
                                                     # Align forecast data with the same index
                                                     forecast_values = df.loc[common_index, 'q50']
                                                     
