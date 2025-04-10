@@ -889,8 +889,8 @@ def submission_viewer():
                                                     
                                                     # RMSE for Median Forecast vs Actual
                                                     if not np.isnan(actual_values).all() and not np.isnan(elia_latest_values).all():
-                                                        forecast_rmse = np.sqrt(np.nanmean((elia_latest_values - actual_values)**2))
-                                                        metrics["ELIA latest RMSE"] = forecast_rmse
+                                                        latest_rmse = np.sqrt(np.nanmean((elia_latest_values - actual_values)**2))
+                                                        metrics["ELIA latest RMSE"] = latest_rmse
                                                     
                                                     # Display metrics
                                                     col1, col2, col3 = st.columns(3)
@@ -907,7 +907,7 @@ def submission_viewer():
                                                         else:
                                                             st.info("Could not calculate Median Forecast RMSE (insufficient data)")
                                                 
-                                                
+
                                                     with col3:
                                                         if "ELIA Latest Forecast RMSE" in metrics:
                                                             st.metric("ELIA latest RMSE", f"{metrics['ELIA latest RMSE']:.2f}")
