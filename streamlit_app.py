@@ -489,7 +489,6 @@ def submission_viewer():
                 # Display basic session info
                 st.info(f"Selected Market Session ID: {session_id}")
                 
-
                 # Resource selector (radio button)
                 resource_options = {
                     "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
@@ -583,71 +582,132 @@ def submission_viewer():
                                         selected_date_utc = pd.to_datetime(selected_date_str)
                                         selected_date_end = selected_date_utc + pd.Timedelta(days=1) - pd.Timedelta(seconds=1)
                                         
-                                        # Fetch actual solar data
-                                        api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
-                                                
-                                        st.info(f"Fetching actual solar data from: {api_url}")
+                                        # Helper functions for fetching actual data
+                                        def get_latest_wind_offshore(start) -> pd.DataFrame:
+                                            """Get the latest wind offshore data."""
+                                            try:
+                                                start = start + pd.Timedelta(days=1)
+                                                end = start
+                                                start = start.strftime('%Y-%m-%d')
+                                                end = end.strftime('%Y-%m-%d')
+
+                                                url = (f'https://griddata.elia.be/eliabecontrols.prod/interface/windforecasting/'
+                                                f'forecastdata?beginDate={start}&endDate={end}&region=1&'
+                                                f'isEliaConnected=&isOffshore=True')
+
+                                                d = pd.read_json(url).rename(
+                                                    columns={
+                                                        'dayAheadConfidence10':'DA elia (11AM) P10',
+                                                        'dayAheadConfidence90':'DA elia (11AM) P90',
+                                                        'dayAheadForecast':'DA elia (11AM)',
+                                                        'monitoredCapacity':'capa',
+                                                        'mostRecentForecast':'latest elia forecast',
+                                                        'realtime':'actual elia',
+                                                        'startsOn':'Datetime',
+                                                        })[['DA elia (11AM)','actual elia','Datetime','latest elia forecast']]
+                                                d['Datetime'] = pd.to_datetime(d['Datetime'])
+                                                d.index = d['Datetime']
+                                                return d.rename(columns={'actual elia':'actual'})
+                                            except Exception as e:
+                                                st.error(f"Error getting latest wind offshore data: {e}")
+                                                return pd.DataFrame()
+
+                                        @st.cache_data(ttl=3600)  # Cache for 1 hour
+                                        def get_cached_actual(date):
+                                            try:
+                                                return get_latest_wind_offshore(date)
+                                            except Exception as e:
+                                                st.error(f"Error getting latest offshore data: {e}")
+                                                return pd.DataFrame()
                                         
-                                        try:
-                                            # Read the JSON data
-                                            response = requests.get(api_url)
-                                            actual_data = None
+                                        actual_data = None
+                                        
+                                        # Fetch actual data based on resource type
+                                        if resource_type == "Solar":
+                                            # Fetch actual solar data
+                                            api_url = f'https://griddata.elia.be/eliabecontrols.prod/interface/solareforecasting/chartdataforzone?dateFrom={selected_date_utc.strftime("%Y-%m-%d")}&dateTo={selected_date_end.strftime("%Y-%m-%d")}&sourceID=1'
+                                                    
+                                            st.info(f"Fetching actual solar data from: {api_url}")
                                             
-                                            if response.status_code == 200:
-                                                solar_data = response.json()
+                                            try:
+                                                # Read the JSON data
+                                                response = requests.get(api_url)
                                                 
-                                                # Convert the JSON data to a pandas DataFrame
-                                                actual_pv = pd.DataFrame(solar_data).iloc[:96]
-                                                
-                                                # Convert timestamp string to datetime
-                                                actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
-                                                
-                                                # Check if the index has timezone info
-                                                has_tz = False
-                                                if not df.index.empty:
-                                                    has_tz = df.index[0].tzinfo is not None
-                                                
-                                                # Make the timestamps timezone-aware or timezone-naive to match the forecast data
-                                                if has_tz:
-                                                    # If forecast data is timezone-aware, make actual data timezone-aware
-                                                    if actual_pv['Datetime'].dt.tz is None:
-                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize('CET')
+                                                if response.status_code == 200:
+                                                    solar_data = response.json()
+                                                    
+                                                    # Convert the JSON data to a pandas DataFrame
+                                                    actual_pv = pd.DataFrame(solar_data).iloc[:96]
+                                                    
+                                                    # Convert timestamp string to datetime
+                                                    actual_pv['Datetime'] = pd.to_datetime(actual_pv['startsOn'])
+                                                    
+                                                    # Check if the index has timezone info
+                                                    has_tz = False
+                                                    if not df.index.empty:
+                                                        has_tz = df.index[0].tzinfo is not None
+                                                    
+                                                    # Make the timestamps timezone-aware or timezone-naive to match the forecast data
+                                                    if has_tz:
+                                                        # If forecast data is timezone-aware, make actual data timezone-aware
+                                                        if actual_pv['Datetime'].dt.tz is None:
+                                                            actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize('CET')
+                                                    else:
+                                                        # If forecast data is timezone-naive, make actual data timezone-naive
+                                                        if actual_pv['Datetime'].dt.tz is not None:
+                                                            actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize(None)
+                                                    
+                                                    actual_pv = actual_pv.set_index('Datetime')
+                                                    
+                                                    # Create timezone-consistent comparison dates
+                                                    if has_tz and selected_date_utc.tzinfo is None:
+                                                        comparison_start = selected_date_utc.tz_localize('CET')
+                                                        comparison_end = selected_date_end.tz_localize('CET')
+                                                    elif not has_tz and selected_date_utc.tzinfo is not None:
+                                                        comparison_start = selected_date_utc.tz_localize(None)
+                                                        comparison_end = selected_date_end.tz_localize(None)
+                                                    else:
+                                                        comparison_start = selected_date_utc
+                                                        comparison_end = selected_date_end
+                                                    
+                                                    # Filter to match our date range
+                                                    actual_pv = actual_pv[(actual_pv.index >= comparison_start) & 
+                                                                        (actual_pv.index <= comparison_end)]
+                                                    
+                                                    if not actual_pv.empty:
+                                                        st.success(f"Successfully loaded actual solar measurements for {len(actual_pv)} time points")
+                                                        actual_data = actual_pv
+                                                        
+                                                        # Display actual data
+                                                        with st.expander("Actual Solar Data", expanded=False):
+                                                            st.dataframe(actual_data)
                                                 else:
-                                                    # If forecast data is timezone-naive, make actual data timezone-naive
-                                                    if actual_pv['Datetime'].dt.tz is not None:
-                                                        actual_pv['Datetime'] = actual_pv['Datetime'].dt.tz_localize(None)
+                                                    st.warning(f"Could not fetch actual solar data: HTTP {response.status_code}")
+
+                                            except Exception as e:
+                                                st.error(f"Error fetching actual solar data: {str(e)}")
+                                                import traceback
+                                                st.error(traceback.format_exc())
+                                        else:  # Wind resource type
+                                            st.info(f"Fetching actual wind data for: {selected_date_utc.strftime('%Y-%m-%d')}")
+                                            
+                                            try:
+                                                # Get cached wind data
+                                                actual_data = get_cached_actual(selected_date_utc)
                                                 
-                                                actual_pv = actual_pv.set_index('Datetime')
-                                                
-                                                # Create timezone-consistent comparison dates
-                                                if has_tz and selected_date_utc.tzinfo is None:
-                                                    comparison_start = selected_date_utc.tz_localize('CET')
-                                                    comparison_end = selected_date_end.tz_localize('CET')
-                                                elif not has_tz and selected_date_utc.tzinfo is not None:
-                                                    comparison_start = selected_date_utc.tz_localize(None)
-                                                    comparison_end = selected_date_end.tz_localize(None)
-                                                else:
-                                                    comparison_start = selected_date_utc
-                                                    comparison_end = selected_date_end
-                                                
-                                                # Filter to match our date range
-                                                actual_pv = actual_pv[(actual_pv.index >= comparison_start) & 
-                                                                    (actual_pv.index <= comparison_end)]
-                                                
-                                                if not actual_pv.empty:
-                                                    st.success(f"Successfully loaded actual measurements for {len(actual_pv)} time points")
-                                                    actual_data = actual_pv
+                                                if not actual_data.empty:
+                                                    st.success(f"Successfully loaded actual wind measurements for {len(actual_data)} time points")
                                                     
                                                     # Display actual data
-                                                    with st.expander("Actual Solar Data", expanded=False):
+                                                    with st.expander("Actual Wind Data", expanded=False):
                                                         st.dataframe(actual_data)
-                                            else:
-                                                st.warning(f"Could not fetch actual data: HTTP {response.status_code}")
-
-                                        except Exception as e:
-                                            st.error(f"Error fetching actual solar data: {str(e)}")
-                                            import traceback
-                                            st.error(traceback.format_exc())
+                                                else:
+                                                    st.warning("No actual wind data available for the selected date.")
+                                                    
+                                            except Exception as e:
+                                                st.error(f"Error fetching actual wind data: {str(e)}")
+                                                import traceback
+                                                st.error(traceback.format_exc())
                                         
                                         # Create the plot
                                         st.subheader(f"{resource_type} Power Forecast for {target_day}")
@@ -692,38 +752,57 @@ def submission_viewer():
                                         )
                                         
                                         # Add actual data if available
-                                        if actual_data is not None:
-                                            # Reformat the actual data if needed - you may need to adjust this based on your actual data structure
-                                            if 'realTime' in actual_data.columns:
-                                                actual_values = actual_data['realTime']
- 
+                                        if actual_data is not None and not actual_data.empty:
+                                            if resource_type == "Solar":
+                                                # For Solar data
+                                                # Add Elia Day-Ahead forecast
+                                                if 'dayAheadForecast' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['dayAheadForecast'],
+                                                            name="ELIA DA",
+                                                            mode="lines",
+                                                            line=dict(color='darkorange', width=2)
+                                                        )
+                                                    )
+                                                
+                                                # Add actual measurements
+                                                if 'realTime' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['realTime'],
+                                                            name="Actual Measurements",
+                                                            mode="lines",
+                                                            line=dict(color='white', width=2, dash='solid')
+                                                        )
+                                                    )
                                             else:
-                                                # Use the first numeric column if column name is unknown
-                                                numeric_cols = actual_data.select_dtypes(include=['number']).columns
-                                                if len(numeric_cols) > 0:
-                                                    actual_values = actual_data[numeric_cols[0]]
-                                                else:
-                                                    actual_values = None
-                                            
-                                            if actual_values is not None:
-                                                fig.add_trace(
-                                                    go.Scatter(
-                                                        x=actual_data.index,
-                                                        y=actual_data['dayAheadForecast'],
-                                                        name="ELIA DA",
-                                                        mode="lines",
-                                                        line=dict(color='darkorange', width=2)
+                                                # For Wind data
+                                                # Add Elia Day-Ahead forecast
+                                                if 'DA elia (11AM)' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['DA elia (11AM)'],
+                                                            name="ELIA DA",
+                                                            mode="lines",
+                                                            line=dict(color='darkorange', width=2)
+                                                        )
                                                     )
-                                                )
-                                                fig.add_trace(
-                                                    go.Scatter(
-                                                        x=actual_data.index,
-                                                        y=actual_values,
-                                                        name="Actual Measurements",
-                                                        mode="lines",
-                                                        line=dict(color='white', width=2, dash='solid')
+                                                
+                                                # Add actual measurements
+                                                if 'actual' in actual_data.columns:
+                                                    fig.add_trace(
+                                                        go.Scatter(
+                                                            x=actual_data.index,
+                                                            y=actual_data['actual'],
+                                                            name="Actual Measurements",
+                                                            mode="lines",
+                                                            line=dict(color='white', width=2, dash='solid')
+                                                        )
                                                     )
-                                                )
                                         
                                         
                                         st.plotly_chart(fig, use_container_width=True)
@@ -745,7 +824,6 @@ def submission_viewer():
     else:
         # Show login message when not authenticated
         st.info("Please log in using the sidebar to access the submission viewer.")
-
 
 from google.cloud import storage
 
@@ -1052,7 +1130,7 @@ def benchmark():
                     if 'uk-test' in df.columns:
                         default_cols.append('uk-test')
 
-                df = df.iloc[-96-8-3:-8].copy()
+                df = df.iloc[-96-4-3:-4].copy()
                 
                 # Pre-compute color mapping for faster plotting
                 color_map = {
