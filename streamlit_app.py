@@ -526,6 +526,7 @@ def submission_viewer():
                                     sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
                                     sc_data = sc_resp.json()["data"]["personal_metrics"]
                                     df_scores = pd.DataFrame(sc_data)
+                                    df_scores['market_date'] = forecast_date
                                     df_scores = add_daily_payout(df_scores)
 
                                     # Display scores
