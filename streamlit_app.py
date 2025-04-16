@@ -1468,7 +1468,7 @@ def benchmark():
 
 def overview():
     """Display submission details and visualizations with proper authentication."""
-    st.title("Predico Submission Viewer")
+    st.title("PnL Viewer")
     
     # Initialize session state variables
     if 'predico_client' not in st.session_state:
