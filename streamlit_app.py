@@ -409,6 +409,86 @@ def list_gcs_files(connection, prefix):
 # Application pages
 from predicoclient import PredicoClient
 
+
+def calculate_month_to_date_pnl(client, market_sessions):
+    """
+    Calculate the Month-to-Date PnL based on the current month's market sessions.
+    
+    Args:
+        client: The PredicoClient instance
+        market_sessions: List of market sessions
+        
+    Returns:
+        float: The sum of daily payouts for the current month
+    """
+    try:
+        # Get the current date and the first day of the current month
+        current_date = pd.Timestamp.now().tz_localize('UTC')
+        first_day_of_month = pd.Timestamp(year=current_date.year, month=current_date.month, day=1).tz_localize('UTC')
+        
+        # Filter market sessions for the current month
+        current_month_sessions = []
+        for session in market_sessions:
+            session_date = pd.to_datetime(session["open_ts"])
+            if session_date >= first_day_of_month:
+                current_month_sessions.append(session)
+        
+        if not current_month_sessions:
+            return 0.0  # No sessions in the current month
+        
+        # Collect all daily payouts for the current month
+        all_payouts = []
+        
+        for session in current_month_sessions:
+            try:
+                session_id = session["id"]
+                challenge_id = None
+                
+                # First, get challenges for this session (using Wind resource type as default)
+                # You might need to check both resource types (Wind and Solar) for a complete calculation
+                resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"  # Wind
+                challenges = client.get_challenges(session_id, resource_id)
+                
+                if challenges:
+                    challenge_id = challenges[0]["id"]
+                    
+                    # Get scores for this challenge
+                    url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
+                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
+                    sc_data = sc_resp.json()["data"]["personal_metrics"]
+                    
+                    if sc_data:
+                        df_scores = pd.DataFrame(sc_data)
+                        
+                        # Calculate forecast date (day after open_ts)
+                        forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                        df_scores['market_date'] = forecast_date
+                        
+                        # Calculate daily payout
+                        df_scores = add_daily_payout(df_scores)
+                        
+                        # Get the payout for this day (should be the same for all rows)
+                        if 'daily_payout' in df_scores.columns and not df_scores.empty:
+                            # Remove duplicate days and get the payout
+                            payout_df = df_scores.drop_duplicates(subset=['market_date'])[['market_date', 'daily_payout']]
+                            all_payouts.append(payout_df)
+            except Exception as e:
+                print(f"Error processing session {session.get('id', 'unknown')}: {e}")
+                continue
+        
+        # Combine all payouts and calculate the sum
+        if all_payouts:
+            combined_payouts = pd.concat(all_payouts, ignore_index=True)
+            combined_payouts = combined_payouts.drop_duplicates(subset=['market_date'])
+            mtd_pnl = combined_payouts['daily_payout'].sum()
+            return mtd_pnl
+        else:
+            return 0.0
+            
+    except Exception as e:
+        print(f"Error calculating Month-to-Date PnL: {e}")
+        return None
+
 def submission_viewer():
     """Display submission details and visualizations with proper authentication."""
     st.title("Predico Submission Viewer")
@@ -496,6 +576,15 @@ def submission_viewer():
                 }
                 resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
                 resource_id = resource_options[resource_type]
+
+                with st.spinner("Calculating Month-to-Date PnL..."):
+                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions)
+                    
+                    # Display Month-to-Date PnL in a prominent box
+                    if mtd_pnl is not None:
+                        st.success(f"Month-to-Date PnL: €{mtd_pnl:.2f}")
+                    else:
+                        st.warning("Could not calculate Month-to-Date PnL")
                 
                 # Step 2: Fetch challenges for the selected market session and resource
                 with st.spinner(f"Fetching challenges for market session {session_id}..."):
