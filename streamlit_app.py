@@ -476,8 +476,6 @@ def calculate_month_to_date_pnl(client, market_sessions):
                 print(f"Error processing session {session.get('id', 'unknown')}: {e}")
                 continue
         
-        
-        # Combine all payouts and calculate the sum
         if all_payouts:
             combined_payouts = pd.concat(all_payouts, ignore_index=True)
             combined_payouts = combined_payouts.drop_duplicates(subset=['market_date'])
