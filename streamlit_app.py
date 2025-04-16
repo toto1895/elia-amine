@@ -576,15 +576,7 @@ def submission_viewer():
                 resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
                 resource_id = resource_options[resource_type]
 
-                with st.spinner("Calculating Month-to-Date PnL..."):
-                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options[resource_type])
-                    
-                    # Display Month-to-Date PnL in a prominent box
-                    if mtd_pnl is not None:
-                        st.success(f"Month-to-Date PnL: €{mtd_pnl:.2f}")
-                    else:
-                        st.warning("Could not calculate Month-to-Date PnL")
-                
+            
                 # Step 2: Fetch challenges for the selected market session and resource
                 with st.spinner(f"Fetching challenges for market session {session_id}..."):
                     challenges = client.get_challenges(session_id, resource_id)
