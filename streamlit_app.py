@@ -1475,43 +1475,102 @@ def benchmark():
         st.error(traceback.format_exc())
 
 def overview():
-    """Show rankings and profit/loss overview."""
-    # Add password protection
-    PASSWORD = pwd_view
-    if "authenticated_overview" not in st.session_state:
-        st.session_state.authenticated_overview = False
-
-    if not st.session_state.authenticated_overview:
-        password = st.text_input("Enter Password to Access Overview:", type="password")
-        if st.button("Login"):
-            if password == PASSWORD:
-                st.session_state.authenticated_overview = True
-                st.success("Access granted!")
-            else:
-                st.error("Invalid password!")
-        return
-
-    # If authenticated, proceed with the overview logic
-    st.title("Ranking & PnL")
+    """Display submission details and visualizations with proper authentication."""
+    st.title("Predico Submission Viewer")
     
-    try:
-        api = get_api()
-        if api is None:
-            st.error("Failed to authenticate API")
-            return
+    # Initialize session state variables
+    if 'predico_client' not in st.session_state:
+        st.session_state.predico_client = None
+        st.session_state.is_authenticated = False
+    
+    # Authentication section
+    with st.sidebar:
+        st.header("Authentication")
+        
+        if not st.session_state.is_authenticated:
+            # Login form
+            with st.form("login_form"):
+                email = st.text_input("Email", type="default")
+                password = st.text_input("Password", type="password")
+                submit_button = st.form_submit_button("Login")
+                
+                if submit_button and email and password:
+                    with st.spinner("Authenticating..."):
+                        client = PredicoClient(email, password)
+                        if client.authenticate():
+                            st.session_state.predico_client = client
+                            st.session_state.is_authenticated = True
+                            st.success("Logged in successfully!")
+                            # Force a rerun to update the UI
+                            st.rerun()
+                        else:
+                            st.error("Authentication failed. Please check your credentials.")
+        else:
+            # Show user info and logout button when logged in
+            st.success(f"Logged in as: {st.session_state.predico_client.email}")
+            #st.info(f"User ID: {st.session_state.predico_client.user_id}")
             
-        data = fetch_last_50_scores(api)
-        if data.empty:
-            st.error("No score data available")
-            return
-            
-        fig = plot_rank_and_payout_separate(data)
-        st.plotly_chart(fig)
-        st.dataframe(data.sort_values(by='market_date', ascending=False).drop(columns='variable'))
-    except Exception as e:
-        st.error(f"Error in overview: {e}")
-        import traceback
-        st.error(traceback.format_exc())
+            if st.button("Logout"):
+                st.session_state.predico_client = None
+                st.session_state.is_authenticated = False
+                st.success("Logged out successfully!")
+                # Force a rerun to update the UI
+                st.rerun()
+    
+    # Main content - only show when authenticated
+    if st.session_state.is_authenticated and st.session_state.predico_client:
+        client = st.session_state.predico_client
+        
+        try:
+            # Step 1: Fetch market sessions
+            with st.spinner("Fetching market sessions..."):
+                market_sessions = client.get_market_sessions(status="finished")
+                
+                if not market_sessions:
+                    st.error("No market sessions available.")
+                    return
+                    
+                # Sort sessions by date (newest first)
+                market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
+                
+                # Create labels for the sessions
+                session_labels = {}
+                for session in market_sessions:
+                    open_date = pd.to_datetime(session["open_ts"]).tz_convert('CET').strftime("%Y-%m-%d")
+                    forecast_date = (pd.to_datetime(session["open_ts"]).tz_convert('CET') + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                    label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
+                    session_labels[label] = session
+                
+                # Resource selector (radio button)
+                resource_options = {
+                    "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
+                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
+                }
+
+                with st.spinner("Calculating Month-to-Date PnL ..."):
+                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options['Solar'])
+                    
+                    # Display Month-to-Date PnL in a prominent box
+                    if mtd_pnl is not None:
+                        st.success(f"SOLAR Month-to-Date PnL: €{mtd_pnl:.2f}")
+                    else:
+                        st.warning("Could not calculate Month-to-Date PnL")
+                    
+                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options['Wind'])
+                    
+                    # Display Month-to-Date PnL in a prominent box
+                    if mtd_pnl is not None:
+                        st.success(f"WIND Month-to-Date PnL: €{mtd_pnl:.2f}")
+                    else:
+                        st.warning("Could not calculate Month-to-Date PnL")
+        except Exception as e:
+            st.error(f"Error PnL: {e}")
+            import traceback
+            st.error(traceback.format_exc())
+    else:
+        # Show login message when not authenticated
+        st.info("Please log in using the sidebar to access the Pnl.")
+
 
 def run_forecast_job():
     """Run forecast generation and oracle submission jobs."""
