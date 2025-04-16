@@ -410,7 +410,7 @@ def list_gcs_files(connection, prefix):
 from predicoclient import PredicoClient
 
 
-def calculate_month_to_date_pnl(client, market_sessions):
+def calculate_month_to_date_pnl(client, market_sessions, ressource_type):
     """
     Calculate the Month-to-Date PnL based on the current month's market sessions.
     
@@ -446,7 +446,7 @@ def calculate_month_to_date_pnl(client, market_sessions):
                 
                 # First, get challenges for this session (using Wind resource type as default)
                 # You might need to check both resource types (Wind and Solar) for a complete calculation
-                resource_id = "491949aa-8662-4010-8a29-75f4267a76c2"  # Wind
+                resource_id = ressource_type  # Wind
                 challenges = client.get_challenges(session_id, resource_id)
                 
                 if challenges:
@@ -577,7 +577,7 @@ def submission_viewer():
                 resource_id = resource_options[resource_type]
 
                 with st.spinner("Calculating Month-to-Date PnL..."):
-                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions)
+                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options[resource_type])
                     
                     # Display Month-to-Date PnL in a prominent box
                     if mtd_pnl is not None:
