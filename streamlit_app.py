@@ -1764,7 +1764,7 @@ def solar_view():
             return results_df
 
         # Define all available models
-        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless','hyb1']
+        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless','hyb']
         
         # Load data for all models and store them in a dictionary
         model_data = {}
