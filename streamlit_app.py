@@ -1764,7 +1764,7 @@ def solar_view():
             return results_df
 
         # Define all available models
-        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless','hyb']
+        available_models = ['meteofrance_seamless', 'dmi_seamless', 'icon_d2', 'metno_seamless']
         
         # Load data for all models and store them in a dictionary
         model_data = {}
@@ -1968,21 +1968,7 @@ def solar_view():
                 score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
                 score_data['avg ALL'] = 0.25*(score_data['p50 (dmi_seamless)']+score_data['p50 (metno_seamless)']+score_data['p50 (meteofrance_seamless)'] + score_data['p50 (icon_d2)'])
                 
-                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 05:15:00"
-                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 07:30:00"
-                mask = (score_data.index >= start_period) & (score_data.index <= end_period)
-                score_data.loc[mask, ['avg ALL','avg icon+dmi']] = score_data.loc[mask, ['avg ALL','avg icon+dmi']] - 150
-                
-                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 07:45:00"
-                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 09:00:00"
-                mask = (score_data.index >= start_period) & (score_data.index <= end_period)
-                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 100
-
-                start_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 17:00:00"
-                end_period = f"{selected_date_utc.strftime("%Y-%m-%d")} 18:30:00"
-                mask = (score_data.index >= start_period) & (score_data.index <= end_period)
-                score_data.loc[mask, ['avg icon+dmi']] = score_data.loc[mask, ['avg icon+dmi']] - 100
-                
+             
                 score_data[score_data<10] = 0.0
                 
                 # Keep only forecast columns and actual data
