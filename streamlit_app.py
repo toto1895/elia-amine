@@ -471,7 +471,7 @@ def calculate_month_to_date_pnl(client, market_sessions, ressource_type):
                         # Get the payout for this day (should be the same for all rows)
                         if 'daily_payout' in df_scores.columns and not df_scores.empty:
                             # Remove duplicate days and get the payout
-                            payout_df = df_scores.drop_duplicates(subset=['market_date'])[['market_date', 'daily_payout']]
+                            payout_df = df_scores.drop_duplicates(subset=['market_date', 'daily_payout'])[['market_date', 'daily_payout']]
                             all_payouts.append(payout_df)
             except Exception as e:
                 print(f"Error processing session {session.get('id', 'unknown')}: {e}")
