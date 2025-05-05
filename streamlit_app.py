@@ -424,7 +424,7 @@ def calculate_month_to_date_pnl(client, market_sessions, ressource_type):
     try:
         # Get the current date and the first day of the current month
         current_date = pd.Timestamp.now().tz_localize('UTC')
-        first_day_of_month = pd.Timestamp(year=current_date.year, month=current_date.month, day=1).tz_localize('UTC')
+        first_day_of_month = pd.Timestamp(year=current_date.year, month=current_date.month, day=1).tz_localize('UTC') - pd.Timedelta(day=1)
         
         # Filter market sessions for the current month
         current_month_sessions = []
