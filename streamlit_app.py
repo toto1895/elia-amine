@@ -1817,6 +1817,8 @@ def solar_view():
                                 total_dfs[model_name] = total_df
                         except:
                             total_df = df_plot.copy()
+                            total_df['Model'] = model_name
+                            print(total_df)
                             total_df.columns = ['Day Ahead 11AM forecast','rec','rec_0.2','rec_0.8']
                             total_dfs[model_name] = total_df
         
