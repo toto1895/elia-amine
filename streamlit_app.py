@@ -1818,6 +1818,7 @@ def solar_view():
                         except:
                             total_df = df_plot.copy()
                             total_df.columns = ['Day Ahead 11AM forecast','rec','rec_0.2','rec_0.8']
+                            total_dfs[model_name] = total_df
         
         if not total_dfs:
             st.error("No forecast data available for any model")
