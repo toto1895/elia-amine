@@ -1628,7 +1628,7 @@ def solar_view():
                 bucket = storage_client.bucket('oracle_predictions')
                 
                 # List files from the regional subdirectory
-                prefix = f'predico-elia/forecasts_solar/regional/{model_name}'
+                prefix = f'predico-elia/forecasts_solar/v2/{model_name}'
                 blobs = list(bucket.list_blobs(prefix=prefix))
                 
                 # Filter for parquet files
