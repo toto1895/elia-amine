@@ -1791,28 +1791,32 @@ def solar_view():
                         # Metrics to be aggregated
                         metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
                         
-                        # Use pandas groupby directly - much more efficient
-                        regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
-                            metric: 'sum' for metric in metrics
-                        }).reset_index()
-                        
-                        # Rename the datetime index column
-                        regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
-                        
-                        # Add Model column back
-                        regional_df['Model'] = model_name
-                        
-                        if not regional_df.empty:
-                            # Group by datetime only and sum all regions together
-                            total_df = regional_df.groupby('Datetime').agg({
-                                'Day Ahead 11AM forecast': 'sum',
-                                'rec': 'sum',
-                                'rec_0.2': 'sum',
-                                'rec_0.8': 'sum'
-                            }).reset_index().set_index('Datetime')
+                        try:
+                            # Use pandas groupby directly - much more efficient
+                            regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
+                                metric: 'sum' for metric in metrics
+                            }).reset_index()
                             
-                            total_df = total_df.resample('15min').interpolate().iloc[:96]
-                            total_dfs[model_name] = total_df
+                            # Rename the datetime index column
+                            regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
+                            
+                            # Add Model column back
+                            regional_df['Model'] = model_name
+                            
+                            if not regional_df.empty:
+                                # Group by datetime only and sum all regions together
+                                total_df = regional_df.groupby('Datetime').agg({
+                                    'Day Ahead 11AM forecast': 'sum',
+                                    'rec': 'sum',
+                                    'rec_0.2': 'sum',
+                                    'rec_0.8': 'sum'
+                                }).reset_index().set_index('Datetime')
+                                
+                                total_df = total_df.resample('15min').interpolate().iloc[:96]
+                                total_dfs[model_name] = total_df
+                        except:
+                            total_df = df_plot.copy()
+                            total_df.columns = ['Day Ahead 11AM forecast','rec','rec_0.2','rec_0.8']
         
         if not total_dfs:
             st.error("No forecast data available for any model")
