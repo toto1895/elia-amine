@@ -1683,11 +1683,12 @@ def solar_view():
                 # Check for minimal required columns for plotting
                 required_cols = ['Region', 'Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
                 missing_cols = [col for col in required_cols if col not in df.columns]
+
                 
                 if missing_cols:
                     st.warning(f"Missing required columns in {model_name} data: {missing_cols}")
                     st.write(f"Available columns: {df.columns.tolist()}")
-                    return None
+                    #return None
                 
                 # Ensure datetime index
                 if 'Datetime' in df.columns:
