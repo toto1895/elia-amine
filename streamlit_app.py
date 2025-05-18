@@ -1775,6 +1775,8 @@ def solar_view():
         for model_name in available_models:
             with st.spinner(f"Loading {model_name} solar forecast data..."):
                 df = load_solar_forecast_data(model_name, selected_date)
+
+                st.dataframe(df)
                 
                 if df is not None:
                     # Filter data to match the selected date range
@@ -1806,7 +1808,7 @@ def solar_view():
                             # Add Model column back
                             regional_df['Model'] = model_name
 
-                            st.dataframe(regional_df)
+                            
 
                             
                             if not regional_df.empty:
