@@ -1595,6 +1595,7 @@ def run_forecast_job():
         import traceback
         st.error(traceback.format_exc())
 
+
 def solar_view():
     """Display solar forecasts for all models with optimized groupby operations and forecast scoring."""
     import datetime
@@ -1739,11 +1740,15 @@ def solar_view():
                 return None
                 
             # Identify all forecast columns (excluding uncertainty bounds)
-            forecast_columns = [col for col in score_df.columns 
+            # Ensure we only include numeric columns for scoring
+            numeric_cols = score_df.select_dtypes(include=['number']).columns.tolist()
+            
+            forecast_columns = [col for col in numeric_cols 
                                if col not in [actual_column, 'p10', 'p90'] 
                                and not col.startswith('Region') 
                                and not col.startswith('Model')
-                               and not col.startswith('Datetime')]
+                               and not col.startswith('Datetime')
+                               and not any(exclude in col for exclude in ['p10', 'p90'])]
             
             # Create a DataFrame to store results
             results = []
@@ -1776,6 +1781,7 @@ def solar_view():
             with st.spinner(f"Loading {model_name} solar forecast data..."):
                 df = load_solar_forecast_data(model_name, selected_date)
 
+                st.dataframe(df)
                 
                 if df is not None:
                     # Filter data to match the selected date range
@@ -1923,10 +1929,13 @@ def solar_view():
             'hyb1':'lightblue'
         }
         
+        # Make sure we're only working with numeric columns
+        numeric_cols = combined_df.select_dtypes(include=['number']).columns
+        
         # Add traces for each model's p50 forecast
         for model_name in total_dfs.keys():
             p50_col = f'p50 ({model_name})'
-            if p50_col in combined_df.columns:
+            if p50_col in numeric_cols:
                 fig.add_trace(
                     go.Scatter(
                         x=combined_df.index,
@@ -1938,21 +1947,22 @@ def solar_view():
                 )
         
         # Add ELIA Day Ahead 11AM forecast from the first model
-        first_model = list(total_dfs.keys())[0]
-        da_col = f'Day Ahead 11AM forecast ({first_model})'
-        if da_col in combined_df.columns:
-            fig.add_trace(
-                go.Scatter(
-                    x=combined_df.index,
-                    y=combined_df[da_col],
-                    name=f"ELIA DA 11AM",
-                    mode='lines',
-                    line_color='orange'
+        if len(total_dfs) > 0:
+            first_model = list(total_dfs.keys())[0]
+            da_col = f'Day Ahead 11AM forecast ({first_model})'
+            if da_col in numeric_cols:
+                fig.add_trace(
+                    go.Scatter(
+                        x=combined_df.index,
+                        y=combined_df[da_col],
+                        name=f"ELIA DA 11AM",
+                        mode='lines',
+                        line_color='orange'
+                    )
                 )
-            )
         
         # Add actual measured data if available
-        if 'Measured & upscaled' in combined_df.columns and not combined_df['Measured & upscaled'].isna().all():
+        if 'Measured & upscaled' in numeric_cols and not combined_df['Measured & upscaled'].isna().all():
             fig.add_trace(
                 go.Scatter(
                     x=combined_df.index,
@@ -1965,8 +1975,13 @@ def solar_view():
             )
         
         # Update layout with dynamic y-axis range
-        max_y_value = combined_df.max().max()
-        y_max = max_y_value * 1.1 if max_y_value > 0 else 100
+        # Filter to only numeric columns before calculating max to avoid type errors
+        numeric_cols = combined_df.select_dtypes(include=['number']).columns
+        if len(numeric_cols) > 0:
+            max_y_value = combined_df[numeric_cols].max().max()
+            y_max = max_y_value * 1.1 if max_y_value > 0 else 100
+        else:
+            y_max = 100  # Default if no numeric columns
         
         fig.update_layout(
             xaxis_title="Time",
@@ -1986,19 +2001,38 @@ def solar_view():
             
             with st.spinner("Calculating forecast scores..."):
                 # Prepare a DataFrame for scoring with data from all models
-                score_data = combined_df.copy().rename(columns={f'Day Ahead 11AM forecast ({first_model})':'ELIA DA 11AM'})
-                score_data[score_data<10] = 0
+                score_data = combined_df.copy()
+                
+                # Rename the Day Ahead column for consistency
+                da_col = f'Day Ahead 11AM forecast ({first_model})'
+                if da_col in score_data.columns:
+                    score_data = score_data.rename(columns={da_col: 'ELIA DA 11AM'})
+                
+                # Convert to numeric and handle small values
+                # First, make sure we only process numeric columns
+                numeric_cols = score_data.select_dtypes(include=['number']).columns
+                if len(numeric_cols) > 0:
+                    score_data[numeric_cols] = score_data[numeric_cols].apply(pd.to_numeric, errors='coerce')
+                    score_data.loc[:, numeric_cols] = score_data.loc[:, numeric_cols].mask(score_data[numeric_cols] < 10, 0)
                 
                 # Create ensemble forecasts
-                if f'p50 (dmi_seamless)' in score_data.columns and f'p50 (icon_d2)' in score_data.columns:
-                    score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
+                p50_dmi_col = 'p50 (dmi_seamless)'
+                p50_icon_col = 'p50 (icon_d2)'
+                
+                if p50_dmi_col in numeric_cols and p50_icon_col in numeric_cols:
+                    score_data['avg icon+dmi'] = 0.5 * (score_data[p50_dmi_col] + score_data[p50_icon_col])
                 
                 # Average of all models if they all exist
                 all_p50_cols = [f'p50 ({model})' for model in available_models]
-                if all(col in score_data.columns for col in all_p50_cols):
+                all_p50_cols_exist = all(col in numeric_cols for col in all_p50_cols)
+                
+                if all_p50_cols_exist:
                     score_data['avg ALL'] = sum(score_data[col] for col in all_p50_cols) / len(all_p50_cols)
                 
-                score_data[score_data<10] = 0.0
+                # Set small values to zero
+                numeric_cols = score_data.select_dtypes(include=['number']).columns
+                if len(numeric_cols) > 0:
+                    score_data.loc[:, numeric_cols] = score_data.loc[:, numeric_cols].mask(score_data[numeric_cols] < 10, 0.0)
                 
                 # Keep only forecast columns and actual data
                 exclude_cols = []
@@ -2055,19 +2089,22 @@ def solar_view():
                     # Create a bar chart comparing error profile
                     fig_scores = go.Figure()
                     
+                    # Make sure we only use numeric columns
+                    numeric_cols = score_data.select_dtypes(include=['number']).columns
+                    
                     # Use avg icon+dmi if available, otherwise use the first model's p50
                     error_series = None
-                    if 'avg icon+dmi' in score_data.columns:
+                    if 'avg icon+dmi' in numeric_cols and 'Measured & upscaled' in numeric_cols:
                         error_series = score_data['Measured & upscaled'] - score_data['avg icon+dmi']
                         error_name = "avg icon+dmi error"
-                    elif 'avg ALL' in score_data.columns:
+                    elif 'avg ALL' in numeric_cols and 'Measured & upscaled' in numeric_cols:
                         error_series = score_data['Measured & upscaled'] - score_data['avg ALL']
                         error_name = "avg ALL error"
-                    elif f'p50 ({first_model})' in score_data.columns:
+                    elif f'p50 ({first_model})' in numeric_cols and 'Measured & upscaled' in numeric_cols:
                         error_series = score_data['Measured & upscaled'] - score_data[f'p50 ({first_model})']
                         error_name = f"{first_model} error"
                         
-                    if error_series is not None:
+                    if error_series is not None and not error_series.isna().all():
                         fig_scores.add_trace(go.Scatter(
                             x=score_data.index,
                             y=error_series,
@@ -2113,7 +2150,6 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
-
 
 def main():
     st.sidebar.title("Navigation")
