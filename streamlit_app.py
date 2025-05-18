@@ -1806,7 +1806,7 @@ def solar_view():
                             # Add Model column back
                             regional_df['Model'] = model_name
 
-                             st.dataframe(regional_df)
+                            st.dataframe(regional_df)
 
                             
                             if not regional_df.empty:
