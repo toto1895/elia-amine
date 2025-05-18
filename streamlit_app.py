@@ -1793,16 +1793,21 @@ def solar_view():
                         metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
                         
                         try:
+
                             # Use pandas groupby directly - much more efficient
                             regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
                                 metric: 'sum' for metric in metrics
                             }).reset_index()
+
                             
                             # Rename the datetime index column
                             regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
                             
                             # Add Model column back
                             regional_df['Model'] = model_name
+
+                             st.dataframe(regional_df)
+
                             
                             if not regional_df.empty:
                                 # Group by datetime only and sum all regions together
