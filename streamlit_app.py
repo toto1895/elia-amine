@@ -1780,8 +1780,6 @@ def solar_view():
         for model_name in available_models:
             with st.spinner(f"Loading {model_name} solar forecast data..."):
                 df = load_solar_forecast_data(model_name, selected_date)
-
-                st.dataframe(df)
                 
                 if df is not None:
                     # Filter data to match the selected date range
@@ -2125,13 +2123,7 @@ def solar_view():
                         st.plotly_chart(fig_scores, use_container_width=True)
                     
                     # Download button for scores
-                    scores_csv = scores_df.to_csv().encode('utf-8')
-                    st.download_button(
-                        label="Download Forecast Scores as CSV",
-                        data=scores_csv,
-                        file_name=f"solar_forecast_scores_{selected_date}.csv",
-                        mime="text/csv",
-                    )
+                    
         
         # Show combined data table
         with st.expander("View Combined Data"):
