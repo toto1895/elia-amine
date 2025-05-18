@@ -1681,9 +1681,9 @@ def solar_view():
                     return None
                 
                 # Check for minimal required columns for plotting
-                required_cols = ['Region', 'Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
+                # Updated required columns based on new column structure
+                required_cols = ['Day Ahead 11AM forecast', 'p50', 'p10', 'p90']
                 missing_cols = [col for col in required_cols if col not in df.columns]
-
                 
                 if missing_cols:
                     st.warning(f"Missing required columns in {model_name} data: {missing_cols}")
@@ -1740,7 +1740,7 @@ def solar_view():
                 
             # Identify all forecast columns (excluding uncertainty bounds)
             forecast_columns = [col for col in score_df.columns 
-                               if col not in [actual_column, 'rec_0.2', 'rec_0.8'] 
+                               if col not in [actual_column, 'p10', 'p90'] 
                                and not col.startswith('Region') 
                                and not col.startswith('Model')
                                and not col.startswith('Datetime')]
@@ -1791,42 +1791,49 @@ def solar_view():
                         # Add Model column for better tracking
                         df_plot['Model'] = model_name
                         
-                        # Metrics to be aggregated
-                        metrics = ['Day Ahead 11AM forecast', 'rec', 'rec_0.2', 'rec_0.8']
+                        # Updated metrics to match new column names
+                        metrics = ['Day Ahead 11AM forecast', 'p50', 'p10', 'p90']
                         
                         try:
-
                             # Use pandas groupby directly - much more efficient
-                            regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
-                                metric: 'sum' for metric in metrics
-                            }).reset_index()
-
-                            
-                            # Rename the datetime index column
-                            regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
-                            
-                            # Add Model column back
-                            regional_df['Model'] = model_name
-
-                            
-
-                            
-                            if not regional_df.empty:
-                                # Group by datetime only and sum all regions together
-                                total_df = regional_df.groupby('Datetime').agg({
-                                    'Day Ahead 11AM forecast': 'sum',
-                                    'rec': 'sum',
-                                    'rec_0.2': 'sum',
-                                    'rec_0.8': 'sum'
-                                }).reset_index().set_index('Datetime')
+                            if 'Region' in df_plot.columns:
+                                regional_df = df_plot.groupby(['Region', df_plot.index]).agg({
+                                    metric: 'sum' for metric in metrics if metric in df_plot.columns
+                                }).reset_index()
                                 
+                                # Rename the datetime index column
+                                regional_df.rename(columns={'level_1': 'Datetime'}, inplace=True)
+                                
+                                # Add Model column back
+                                regional_df['Model'] = model_name
+                                
+                                if not regional_df.empty:
+                                    # Group by datetime only and sum all regions together
+                                    total_df = regional_df.groupby('Datetime').agg({
+                                        metric: 'sum' for metric in metrics if metric in regional_df.columns
+                                    }).reset_index().set_index('Datetime')
+                                    
+                                    total_df = total_df.resample('15min').interpolate().iloc[:96]
+                                    total_dfs[model_name] = total_df
+                            else:
+                                # If no Region column, assume the data is already aggregated
+                                total_df = df_plot.copy()
                                 total_df = total_df.resample('15min').interpolate().iloc[:96]
                                 total_dfs[model_name] = total_df
-                        except:
+                        except Exception as e:
+                            st.warning(f"Error in aggregation for {model_name}: {str(e)}")
+                            # Fallback to direct copy if groupby fails
                             total_df = df_plot.copy()
                             total_df['Model'] = model_name
-                            print(total_df)
-                            total_df.columns = ['Day Ahead 11AM forecast','rec','rec_0.2','rec_0.8']
+                            # Make sure we have the expected columns
+                            for col in metrics:
+                                if col not in total_df.columns and col.replace('p50', 'rec') in total_df.columns:
+                                    total_df[col] = total_df[col.replace('p50', 'rec')]
+                                if col not in total_df.columns and col.replace('p10', 'rec_0.2') in total_df.columns:
+                                    total_df[col] = total_df[col.replace('p10', 'rec_0.2')]
+                                if col not in total_df.columns and col.replace('p90', 'rec_0.8') in total_df.columns:
+                                    total_df[col] = total_df[col.replace('p90', 'rec_0.8')]
+                            
                             total_dfs[model_name] = total_df
         
         if not total_dfs:
@@ -1889,16 +1896,15 @@ def solar_view():
                 # Rename columns to include model name
                 combined_df.rename(columns={
                     'Day Ahead 11AM forecast': f'Day Ahead 11AM forecast ({model_name})',
-                    'rec': f'p50 ({model_name})',
-                    'rec_0.2': f'rec_0.2 ({model_name})',
-                    'rec_0.8': f'rec_0.8 ({model_name})'
+                    'p50': f'p50 ({model_name})',
+                    'p10': f'p10 ({model_name})',
+                    'p90': f'p90 ({model_name})'
                 }, inplace=True)
             else:
                 # Add columns from this model
-                combined_df[f'Day Ahead 11AM forecast ({model_name})'] = total_df['Day Ahead 11AM forecast']
-                combined_df[f'p50 ({model_name})'] = total_df['rec']
-                combined_df[f'rec_0.2 ({model_name})'] = total_df['rec_0.2']
-                combined_df[f'rec_0.8 ({model_name})'] = total_df['rec_0.8']
+                for col in ['Day Ahead 11AM forecast', 'p50', 'p10', 'p90']:
+                    if col in total_df.columns:
+                        combined_df[f'{col} ({model_name})'] = total_df[col]
         
         # Add the actual measurements (should be the same for all models)
         if actual_data is not None:
@@ -1920,27 +1926,31 @@ def solar_view():
         
         # Add traces for each model's p50 forecast
         for model_name in total_dfs.keys():
-            fig.add_trace(
-                go.Scatter(
-                    x=combined_df.index,
-                    y=combined_df[f'p50 ({model_name})'],
-                    name=f"p50 ({model_name})",
-                    mode='lines',
-                    line_color=model_colors.get(model_name, 'gray')
+            p50_col = f'p50 ({model_name})'
+            if p50_col in combined_df.columns:
+                fig.add_trace(
+                    go.Scatter(
+                        x=combined_df.index,
+                        y=combined_df[p50_col],
+                        name=f"p50 ({model_name})",
+                        mode='lines',
+                        line_color=model_colors.get(model_name, 'gray')
+                    )
                 )
-            )
         
         # Add ELIA Day Ahead 11AM forecast from the first model
         first_model = list(total_dfs.keys())[0]
-        fig.add_trace(
-            go.Scatter(
-                x=combined_df.index,
-                y=combined_df[f'Day Ahead 11AM forecast ({first_model})'],
-                name=f"ELIA DA 11AM",
-                mode='lines',
-                line_color='orange'
+        da_col = f'Day Ahead 11AM forecast ({first_model})'
+        if da_col in combined_df.columns:
+            fig.add_trace(
+                go.Scatter(
+                    x=combined_df.index,
+                    y=combined_df[da_col],
+                    name=f"ELIA DA 11AM",
+                    mode='lines',
+                    line_color='orange'
+                )
             )
-        )
         
         # Add actual measured data if available
         if 'Measured & upscaled' in combined_df.columns and not combined_df['Measured & upscaled'].isna().all():
@@ -1971,27 +1981,46 @@ def solar_view():
         
         st.plotly_chart(fig, use_container_width=True)
         
-    
-        
         # Calculate and display forecast scoring if actual measurements are available
         if actual_data is not None:
             st.subheader("Forecast Scoring")
             
             with st.spinner("Calculating forecast scores..."):
                 # Prepare a DataFrame for scoring with data from all models
-                score_data = combined_df.copy().rename(columns={'Day Ahead 11AM forecast (icon_d2)':'ELIA DA 11AM'})
+                score_data = combined_df.copy().rename(columns={f'Day Ahead 11AM forecast ({first_model})':'ELIA DA 11AM'})
                 score_data[score_data<10] = 0
-                score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
-                score_data['avg ALL'] = 0.25*(score_data['p50 (dmi_seamless)']+score_data['p50 (metno_seamless)']+score_data['p50 (meteofrance_seamless)'] + score_data['p50 (icon_d2)'])
                 
-             
+                # Create ensemble forecasts
+                if f'p50 (dmi_seamless)' in score_data.columns and f'p50 (icon_d2)' in score_data.columns:
+                    score_data['avg icon+dmi'] = 0.5*(score_data['p50 (dmi_seamless)'] + score_data['p50 (icon_d2)'])
+                
+                # Average of all models if they all exist
+                all_p50_cols = [f'p50 ({model})' for model in available_models]
+                if all(col in score_data.columns for col in all_p50_cols):
+                    score_data['avg ALL'] = sum(score_data[col] for col in all_p50_cols) / len(all_p50_cols)
+                
                 score_data[score_data<10] = 0.0
                 
                 # Keep only forecast columns and actual data
-                exclude_cols = [col for col in score_data.columns if 'rec_0.2' in col or 'rec_0.8' in col or 'Most recent forecast' in col or 'Week ahead forecast' in col
-                                or 'Day Ahead 11AM forecast (meteofrance_seamless)' in col or 'Day Ahead 11AM forecast (metno_seamless)' in col 
-                                or 'Day Ahead 11AM forecast (dmi_seamless)' in col 
-                                ]
+                exclude_cols = []
+                # Add p10/p90 columns to exclude list
+                for model in available_models:
+                    exclude_cols.extend([
+                        f'p10 ({model})', 
+                        f'p90 ({model})'
+                    ])
+                # Add other columns to exclude
+                exclude_cols.extend([
+                    'Most recent forecast', 
+                    'Week ahead forecast'
+                ])
+                # Add all Day Ahead forecasts except the one we renamed
+                for model in available_models:
+                    if model != first_model:
+                        exclude_cols.append(f'Day Ahead 11AM forecast ({model})')
+                
+                # Filter out columns that actually exist
+                exclude_cols = [col for col in exclude_cols if col in score_data.columns]
                 score_data = score_data.drop(columns=exclude_cols)
                 
                 scores_df = calculate_forecast_scores(score_data)
@@ -2024,28 +2053,40 @@ def solar_view():
                         - **Bias**: Average difference (forecast - actual). Positive values indicate over-forecasting, negative values indicate under-forecasting.
                         """)
                     
-                    # Create a bar chart comparing RMSE values
+                    # Create a bar chart comparing error profile
                     fig_scores = go.Figure()
-                    fig_scores.add_trace(go.Scatter(
-                    x=score_data.index,
-                    y=score_data['Measured & upscaled'] - score_data['avg icon+dmi'],
-                    name=f"avg ALL",
-                    mode='lines',
-                    line_color='red',
-                    showlegend=False
-                    ))
                     
-                    fig_scores.update_layout(
-                        title='error profile ',
-                        xaxis_title='',
-                        yaxis_title='error (MW)',
-                        template='plotly_dark',
-                        height=400
-                    )
-                    
-                    st.plotly_chart(fig_scores, use_container_width=True)
-                    
-                    # Create a scatter plot of forecast vs actual for each model
+                    # Use avg icon+dmi if available, otherwise use the first model's p50
+                    error_series = None
+                    if 'avg icon+dmi' in score_data.columns:
+                        error_series = score_data['Measured & upscaled'] - score_data['avg icon+dmi']
+                        error_name = "avg icon+dmi error"
+                    elif 'avg ALL' in score_data.columns:
+                        error_series = score_data['Measured & upscaled'] - score_data['avg ALL']
+                        error_name = "avg ALL error"
+                    elif f'p50 ({first_model})' in score_data.columns:
+                        error_series = score_data['Measured & upscaled'] - score_data[f'p50 ({first_model})']
+                        error_name = f"{first_model} error"
+                        
+                    if error_series is not None:
+                        fig_scores.add_trace(go.Scatter(
+                            x=score_data.index,
+                            y=error_series,
+                            name=error_name,
+                            mode='lines',
+                            line_color='red',
+                            showlegend=False
+                        ))
+                        
+                        fig_scores.update_layout(
+                            title='Error Profile',
+                            xaxis_title='',
+                            yaxis_title='Error (MW)',
+                            template='plotly_dark',
+                            height=400
+                        )
+                        
+                        st.plotly_chart(fig_scores, use_container_width=True)
                     
                     # Download button for scores
                     scores_csv = scores_df.to_csv().encode('utf-8')
@@ -2073,6 +2114,7 @@ def solar_view():
         st.error(f"Error in solar view: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 def main():
     st.sidebar.title("Navigation")
