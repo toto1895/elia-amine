@@ -1776,7 +1776,6 @@ def solar_view():
             with st.spinner(f"Loading {model_name} solar forecast data..."):
                 df = load_solar_forecast_data(model_name, selected_date)
 
-                st.dataframe(df)
                 
                 if df is not None:
                     # Filter data to match the selected date range
