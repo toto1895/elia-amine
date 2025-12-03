@@ -1804,7 +1804,7 @@ def calculate_two_month_pnl(client, market_sessions, resource_id):
         if forecast_date < last_start:
             break
 
-        payout = fetch_daily_payout_for_session(client, session["id"], resource_id)
+        payout =  fetch_daily_payout_for_session(client, session["id"], resource_id)
         if payout is not None:
             payouts.append({"market_date": forecast_date, "daily_payout": payout})
 
@@ -1821,15 +1821,15 @@ def calculate_two_month_pnl(client, market_sessions, resource_id):
 
 
 @st.cache_data(show_spinner=False)
-def fetch_daily_payout_for_session(client, session_id, resource_id):
+def fetch_daily_payout_for_session(_client, session_id, resource_id):
     try:
-        challenges = client.get_challenges(session_id, resource_id)
+        challenges = _client.get_challenges(session_id, resource_id)
         if not challenges:
             return None
 
         challenge_id = challenges[0]["id"]
         url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
-        sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
+        sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=_client.headers)
         sc_data = sc_resp.json()["data"]["personal_metrics"]
         if not sc_data:
             return None
@@ -1839,10 +1839,10 @@ def fetch_daily_payout_for_session(client, session_id, resource_id):
         if "daily_payout" not in df_scores.columns or df_scores.empty:
             return None
 
-        # same payout per day -> take first
         return float(df_scores["daily_payout"].iloc[0])
     except Exception:
         return None
+
 
 
 def run_forecast_job():
