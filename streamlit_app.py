@@ -1709,25 +1709,18 @@ def benchmark():
         st.error(traceback.format_exc())
 
 def overview():
-    """Display submission details and visualizations with proper authentication."""
-    #st.title("PnL Viewer")
-    
-    # Initialize session state variables
     if 'predico_client' not in st.session_state:
         st.session_state.predico_client = None
         st.session_state.is_authenticated = False
-    
-    # Authentication section
+
+    # --- AUTH (unchanged) ---
     with st.sidebar:
         st.header("Authentication")
-        
         if not st.session_state.is_authenticated:
-            # Login form
             with st.form("login_form"):
-                email = st.text_input("Email", type="default")
+                email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
                 submit_button = st.form_submit_button("Login")
-                
                 if submit_button and email and password:
                     with st.spinner("Authenticating..."):
                         client = PredicoClient(email, password)
@@ -1735,75 +1728,121 @@ def overview():
                             st.session_state.predico_client = client
                             st.session_state.is_authenticated = True
                             st.success("Logged in successfully!")
-                            # Force a rerun to update the UI
                             st.rerun()
                         else:
                             st.error("Authentication failed. Please check your credentials.")
         else:
-            # Show user info and logout button when logged in
             st.success(f"Logged in as: {st.session_state.predico_client.email}")
-            #st.info(f"User ID: {st.session_state.predico_client.user_id}")
-            
             if st.button("Logout"):
                 st.session_state.predico_client = None
                 st.session_state.is_authenticated = False
                 st.success("Logged out successfully!")
-                # Force a rerun to update the UI
                 st.rerun()
-    
-    # Main content - only show when authenticated
-    if st.session_state.is_authenticated and st.session_state.predico_client:
-        client = st.session_state.predico_client
-        
-        try:
-            # Step 1: Fetch market sessions
-            with st.spinner("Fetching market sessions..."):
-                market_sessions = client.get_market_sessions(status="finished")
-                
-                if not market_sessions:
-                    st.error("No market sessions available.")
-                    return
-                    
-                # Sort sessions by date (newest first)
-                market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
-                
-                # Create labels for the sessions
-                session_labels = {}
-                for session in market_sessions:
-                    open_date = pd.to_datetime(session["open_ts"]).tz_convert('CET').strftime("%Y-%m-%d")
-                    forecast_date = (pd.to_datetime(session["open_ts"]).tz_convert('CET') + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                    label = f"Market {session['id']} - Date: {open_date} (Forecast: {forecast_date})"
-                    session_labels[label] = session
-                
-                # Resource selector (radio button)
-                resource_options = {
-                    "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
-                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
-                }
 
-                with st.spinner("Calculating Month-to-Date PnL ..."):
-                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options['Solar'])
-                    
-                    # Display Month-to-Date PnL in a prominent box
-                    if mtd_pnl is not None:
-                        st.success(f"SOLAR Month-to-Date PnL: €{mtd_pnl:.2f}")
-                    else:
-                        st.warning("Could not calculate Month-to-Date PnL")
-                    
-                    mtd_pnl = calculate_month_to_date_pnl(client, market_sessions, resource_options['Wind'])
-                    
-                    # Display Month-to-Date PnL in a prominent box
-                    if mtd_pnl is not None:
-                        st.success(f"WIND Month-to-Date PnL: €{mtd_pnl:.2f}")
-                    else:
-                        st.warning("Could not calculate Month-to-Date PnL")
-        except Exception as e:
-            st.error(f"Error PnL: {e}")
-            import traceback
-            st.error(traceback.format_exc())
-    else:
-        # Show login message when not authenticated
-        st.info("Please log in using the sidebar to access the Pnl.")
+    if not (st.session_state.is_authenticated and st.session_state.predico_client):
+        st.info("Please log in using the sidebar to access the PnL.")
+        return
+
+    client = st.session_state.predico_client
+
+    try:
+        with st.spinner("Fetching market sessions..."):
+            market_sessions = client.get_market_sessions(status="finished")
+        if not market_sessions:
+            st.error("No market sessions available.")
+            return
+
+        # newest first
+        market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
+
+        resource_ids = {
+            "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
+            "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
+        }
+
+        with st.spinner("Calculating PnL (current + last month)..."):
+            cur_solar, last_solar = calculate_two_month_pnl(
+                client, market_sessions, resource_ids["Solar"]
+            )
+            cur_wind, last_wind = calculate_two_month_pnl(
+                client, market_sessions, resource_ids["Wind"]
+            )
+
+        col1, col2 = st.columns(2)
+        with col1:
+            st.subheader("Solar")
+            st.metric("Current month PnL", f"€{cur_solar:,.2f}")
+            st.metric("Last month PnL", f"€{last_solar:,.2f}")
+        with col2:
+            st.subheader("Wind")
+            st.metric("Current month PnL", f"€{cur_wind:,.2f}")
+            st.metric("Last month PnL", f"€{last_wind:,.2f}")
+
+    except Exception as e:
+        st.error(f"Error PnL: {e}")
+        import traceback
+        st.error(traceback.format_exc())
+
+
+def _month_boundaries_cet():
+    now = pd.Timestamp.now(tz="CET").normalize()
+    current_start = now.replace(day=1)
+    last_end = current_start - pd.Timedelta(days=1)
+    last_start = last_end.replace(day=1)
+    return current_start, last_start, last_end
+
+
+def calculate_two_month_pnl(client, market_sessions, resource_id):
+    current_start, last_start, last_end = _month_boundaries_cet()
+
+    payouts = []
+    for session in market_sessions:
+        open_ts = pd.to_datetime(session["open_ts"]).tz_convert("CET")
+        forecast_date = (open_ts + pd.Timedelta(days=1)).normalize()
+
+        # sessions sorted desc -> once older than last month, break
+        if forecast_date < last_start:
+            break
+
+        payout = fetch_daily_payout_for_session(client, session["id"], resource_id)
+        if payout is not None:
+            payouts.append({"market_date": forecast_date, "daily_payout": payout})
+
+    if not payouts:
+        return 0.0, 0.0
+
+    df = pd.DataFrame(payouts)
+    cur_mask = df["market_date"] >= current_start
+    last_mask = (df["market_date"] >= last_start) & (df["market_date"] <= last_end)
+
+    cur_pnl = df.loc[cur_mask, "daily_payout"].sum()
+    last_pnl = df.loc[last_mask, "daily_payout"].sum()
+    return float(cur_pnl), float(last_pnl)
+
+
+@st.cache_data(show_spinner=False)
+def fetch_daily_payout_for_session(client, session_id, resource_id):
+    try:
+        challenges = client.get_challenges(session_id, resource_id)
+        if not challenges:
+            return None
+
+        challenge_id = challenges[0]["id"]
+        url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
+        sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
+        sc_data = sc_resp.json()["data"]["personal_metrics"]
+        if not sc_data:
+            return None
+
+        df_scores = pd.DataFrame(sc_data)
+        df_scores = add_daily_payout(df_scores)
+        if "daily_payout" not in df_scores.columns or df_scores.empty:
+            return None
+
+        # same payout per day -> take first
+        return float(df_scores["daily_payout"].iloc[0])
+    except Exception:
+        return None
 
 
 def run_forecast_job():
