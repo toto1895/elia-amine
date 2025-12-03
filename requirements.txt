@@ -7,3 +7,4 @@ plotly
 gcsfs
 st-files-connection
 google-cloud-run
+joblib

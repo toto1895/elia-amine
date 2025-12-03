@@ -1708,6 +1708,8 @@ def benchmark():
         import traceback
         st.error(traceback.format_exc())
 
+
+
 def overview():
     if 'predico_client' not in st.session_state:
         st.session_state.predico_client = None
@@ -1792,25 +1794,43 @@ def _month_boundaries_cet():
     return current_start, last_start, last_end
 
 
-def calculate_two_month_pnl(client, market_sessions, resource_id):
+from joblib import Parallel, delayed
+# pip install joblib  (if not yet installed)
+
+def calculate_two_month_pnl(client, market_sessions, resource_id, n_jobs=8):
     current_start, last_start, last_end = _month_boundaries_cet()
 
-    payouts = []
+    # precompute sessions to query (only current + last month)
+    sessions_to_query = []
     for session in market_sessions:
         open_ts = pd.to_datetime(session["open_ts"]).tz_convert("CET")
         forecast_date = (open_ts + pd.Timedelta(days=1)).normalize()
-
-        # sessions sorted desc -> once older than last month, stop
-        if forecast_date < last_start:
+        if forecast_date < last_start:  # list is sorted desc -> break early
             break
-
-        forecast_date_str = forecast_date.strftime("%Y-%m-%d")
-
-        payout = fetch_daily_payout_for_session(
-            client, session["id"], resource_id, forecast_date_str
+        sessions_to_query.append(
+            (
+                session["id"],
+                forecast_date,
+                forecast_date.strftime("%Y-%m-%d"),
+            )
         )
-        if payout is not None:
-            payouts.append({"market_date": forecast_date, "daily_payout": payout})
+
+    if not sessions_to_query:
+        return 0.0, 0.0
+
+    # parallel HTTP calls (IO-bound -> threading backend)
+    results = Parallel(n_jobs=n_jobs, backend="threading")(
+        delayed(fetch_daily_payout_for_session)(
+            client, session_id, resource_id, forecast_date_str
+        )
+        for session_id, forecast_date, forecast_date_str in sessions_to_query
+    )
+
+    payouts = [
+        {"market_date": forecast_date, "daily_payout": payout}
+        for (session_id, forecast_date, _), payout in zip(sessions_to_query, results)
+        if payout is not None
+    ]
 
     if not payouts:
         return 0.0, 0.0
