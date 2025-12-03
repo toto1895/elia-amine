@@ -410,84 +410,325 @@ def list_gcs_files(connection, prefix):
 from predicoclient import PredicoClient
 
 
-def calculate_month_to_date_pnl(client, market_sessions, ressource_type):
+import streamlit as st
+import pandas as pd
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from functools import lru_cache
+
+
+def calculate_monthly_pnl(client, market_sessions, resource_id, year, month):
     """
-    Calculate the Month-to-Date PnL based on the current month's market sessions.
+    Calculate PnL for a specific month using parallel processing.
     
     Args:
         client: The PredicoClient instance
         market_sessions: List of market sessions
+        resource_id: Resource UUID (Solar or Wind)
+        year: Target year
+        month: Target month (1-12)
         
     Returns:
-        float: The sum of daily payouts for the current month
+        float: The sum of daily payouts for the specified month
     """
     try:
-
-        # Get the current date and the first day of the current month
-        current_date = pd.Timestamp.now().tz_localize('UTC')+pd.Timedelta(days=1)
-        first_day_of_month = pd.Timestamp(year=current_date.year, month=current_date.month, day=1).tz_localize('UTC') - pd.Timedelta(days=1)
+        # Calculate date range for the target month
+        first_day = pd.Timestamp(year=year, month=month, day=1, tz='UTC') - pd.Timedelta(days=1)
         
-        # Filter market sessions for the current month
-        current_month_sessions = []
-        for session in market_sessions:
-            session_date = pd.to_datetime(session["open_ts"])
-            if session_date >= first_day_of_month:
-                current_month_sessions.append(session)
+        # Get last day of month
+        if month == 12:
+            last_day = pd.Timestamp(year=year + 1, month=1, day=1, tz='UTC')
+        else:
+            last_day = pd.Timestamp(year=year, month=month + 1, day=1, tz='UTC')
         
-        if not current_month_sessions:
-            return 0.0  # No sessions in the current month
+        # Filter market sessions for the target month
+        month_sessions = [
+            session for session in market_sessions
+            if first_day <= pd.to_datetime(session["open_ts"]) < last_day
+        ]
         
-        # Collect all daily payouts for the current month
-        all_payouts = []
+        if not month_sessions:
+            return 0.0
         
-        for session in current_month_sessions:
+        def fetch_session_payout(session):
+            """Fetch payout for a single session."""
             try:
                 session_id = session["id"]
-                challenge_id = None
-                
-                # First, get challenges for this session (using Wind resource type as default)
-                # You might need to check both resource types (Wind and Solar) for a complete calculation
-                resource_id = ressource_type  # Wind
                 challenges = client.get_challenges(session_id, resource_id)
                 
-                if challenges:
-                    challenge_id = challenges[0]["id"]
-                    
-                    # Get scores for this challenge
-                    url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
-                    sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=client.headers)
-                    sc_data = sc_resp.json()["data"]["personal_metrics"]
-                    
-                    if sc_data:
-                        df_scores = pd.DataFrame(sc_data)
-                        
-                        # Calculate forecast date (day after open_ts)
-                        forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
-                        df_scores['market_date'] = forecast_date
-                        
-                        # Calculate daily payout
-                        df_scores = add_daily_payout(df_scores)
-                        
-                        # Get the payout for this day (should be the same for all rows)
-                        if 'daily_payout' in df_scores.columns and not df_scores.empty:
-                            # Remove duplicate days and get the payout
-                            payout_df = df_scores.drop_duplicates(subset=['market_date', 'daily_payout'])[['market_date', 'daily_payout']]
-                            all_payouts.append(payout_df)
+                if not challenges:
+                    return None
+                
+                challenge_id = challenges[0]["id"]
+                
+                url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
+                sc_resp = requests.get(
+                    url_sc, 
+                    params={"challenge": challenge_id}, 
+                    headers=client.headers,
+                    timeout=10
+                )
+                sc_data = sc_resp.json().get("data", {}).get("personal_metrics")
+                
+                if not sc_data:
+                    return None
+                
+                df_scores = pd.DataFrame(sc_data)
+                forecast_date = (pd.to_datetime(session["open_ts"]) + pd.Timedelta(days=1)).strftime("%Y-%m-%d")
+                df_scores['market_date'] = forecast_date
+                df_scores = add_daily_payout(df_scores)
+                
+                if 'daily_payout' in df_scores.columns and not df_scores.empty:
+                    return {
+                        'market_date': forecast_date,
+                        'daily_payout': df_scores['daily_payout'].iloc[0]
+                    }
+                return None
+                
             except Exception as e:
-                print(f"Error processing session {session.get('id', 'unknown')}: {e}")
-                continue
+                return None
+        
+        # Use parallel processing to fetch all session payouts
+        all_payouts = []
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = {executor.submit(fetch_session_payout, session): session for session in month_sessions}
+            
+            for future in as_completed(futures):
+                result = future.result()
+                if result:
+                    all_payouts.append(result)
         
         if all_payouts:
-            combined_payouts = pd.concat(all_payouts, ignore_index=True)
-            combined_payouts = combined_payouts.drop_duplicates(subset=['market_date'])
-            mtd_pnl = combined_payouts['daily_payout'].sum()
-            return mtd_pnl
-        else:
-            return 0.0
-            
+            df_payouts = pd.DataFrame(all_payouts)
+            df_payouts = df_payouts.drop_duplicates(subset=['market_date'])
+            return df_payouts['daily_payout'].sum()
+        
+        return 0.0
+        
     except Exception as e:
-        print(f"Error calculating Month-to-Date PnL: {e}")
+        print(f"Error calculating monthly PnL: {e}")
         return None
+
+
+def calculate_all_pnl_parallel(client, market_sessions, resource_options):
+    """
+    Calculate current and last month PnL for all resources in parallel.
+    
+    Returns:
+        dict: Nested dict with resource -> month -> pnl values
+    """
+    current_date = pd.Timestamp.now(tz='UTC')
+    current_year = current_date.year
+    current_month = current_date.month
+    
+    # Calculate last month
+    if current_month == 1:
+        last_month = 12
+        last_month_year = current_year - 1
+    else:
+        last_month = current_month - 1
+        last_month_year = current_year
+    
+    # Define all calculations needed
+    calculations = []
+    for resource_name, resource_id in resource_options.items():
+        calculations.append({
+            'resource_name': resource_name,
+            'resource_id': resource_id,
+            'year': current_year,
+            'month': current_month,
+            'period': 'current'
+        })
+        calculations.append({
+            'resource_name': resource_name,
+            'resource_id': resource_id,
+            'year': last_month_year,
+            'month': last_month,
+            'period': 'last'
+        })
+    
+    results = {name: {'current': None, 'last': None} for name in resource_options.keys()}
+    
+    def run_calculation(calc):
+        pnl = calculate_monthly_pnl(
+            client, 
+            market_sessions, 
+            calc['resource_id'], 
+            calc['year'], 
+            calc['month']
+        )
+        return calc['resource_name'], calc['period'], pnl
+    
+    # Run all calculations in parallel
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        futures = [executor.submit(run_calculation, calc) for calc in calculations]
+        
+        for future in as_completed(futures):
+            resource_name, period, pnl = future.result()
+            results[resource_name][period] = pnl
+    
+    return results, current_month, current_year, last_month, last_month_year
+
+
+def overview():
+    """Display submission details and visualizations with proper authentication."""
+    
+    # Initialize session state variables
+    if 'predico_client' not in st.session_state:
+        st.session_state.predico_client = None
+        st.session_state.is_authenticated = False
+    
+    # Authentication section
+    with st.sidebar:
+        st.header("Authentication")
+        
+        if not st.session_state.is_authenticated:
+            with st.form("login_form"):
+                email = st.text_input("Email", type="default")
+                password = st.text_input("Password", type="password")
+                submit_button = st.form_submit_button("Login")
+                
+                if submit_button and email and password:
+                    with st.spinner("Authenticating..."):
+                        client = PredicoClient(email, password)
+                        if client.authenticate():
+                            st.session_state.predico_client = client
+                            st.session_state.is_authenticated = True
+                            st.success("Logged in successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Authentication failed. Please check your credentials.")
+        else:
+            st.success(f"Logged in as: {st.session_state.predico_client.email}")
+            
+            if st.button("Logout"):
+                st.session_state.predico_client = None
+                st.session_state.is_authenticated = False
+                st.success("Logged out successfully!")
+                st.rerun()
+    
+    # Main content - only show when authenticated
+    if st.session_state.is_authenticated and st.session_state.predico_client:
+        client = st.session_state.predico_client
+        
+        try:
+            with st.spinner("Fetching market sessions..."):
+                market_sessions = client.get_market_sessions(status="finished")
+                
+                if not market_sessions:
+                    st.error("No market sessions available.")
+                    return
+                
+                market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
+                
+                resource_options = {
+                    "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
+                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"
+                }
+
+            with st.spinner("Calculating PnL (this may take a moment)..."):
+                results, curr_month, curr_year, last_month, last_year = calculate_all_pnl_parallel(
+                    client, market_sessions, resource_options
+                )
+            
+            # Display results in a clean layout
+            st.header("📊 PnL Summary")
+            
+            # Month names for display
+            month_names = {
+                1: "January", 2: "February", 3: "March", 4: "April",
+                5: "May", 6: "June", 7: "July", 8: "August",
+                9: "September", 10: "October", 11: "November", 12: "December"
+            }
+            
+            curr_month_name = f"{month_names[curr_month]} {curr_year}"
+            last_month_name = f"{month_names[last_month]} {last_year}"
+            
+            # Create two columns for Solar and Wind
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.subheader("☀️ Solar")
+                solar_current = results['Solar']['current']
+                solar_last = results['Solar']['last']
+                
+                if solar_current is not None:
+                    delta = None
+                    if solar_last is not None and solar_last != 0:
+                        delta = f"{((solar_current - solar_last) / abs(solar_last)) * 100:.1f}%"
+                    st.metric(
+                        label=f"Current Month ({curr_month_name})",
+                        value=f"€{solar_current:.2f}",
+                        delta=delta
+                    )
+                else:
+                    st.warning(f"Could not calculate {curr_month_name} PnL")
+                
+                if solar_last is not None:
+                    st.metric(
+                        label=f"Last Month ({last_month_name})",
+                        value=f"€{solar_last:.2f}"
+                    )
+                else:
+                    st.warning(f"Could not calculate {last_month_name} PnL")
+            
+            with col2:
+                st.subheader("💨 Wind")
+                wind_current = results['Wind']['current']
+                wind_last = results['Wind']['last']
+                
+                if wind_current is not None:
+                    delta = None
+                    if wind_last is not None and wind_last != 0:
+                        delta = f"{((wind_current - wind_last) / abs(wind_last)) * 100:.1f}%"
+                    st.metric(
+                        label=f"Current Month ({curr_month_name})",
+                        value=f"€{wind_current:.2f}",
+                        delta=delta
+                    )
+                else:
+                    st.warning(f"Could not calculate {curr_month_name} PnL")
+                
+                if wind_last is not None:
+                    st.metric(
+                        label=f"Last Month ({last_month_name})",
+                        value=f"€{wind_last:.2f}"
+                    )
+                else:
+                    st.warning(f"Could not calculate {last_month_name} PnL")
+            
+            # Total summary
+            st.divider()
+            st.subheader("📈 Combined Totals")
+            
+            total_col1, total_col2 = st.columns(2)
+            
+            with total_col1:
+                total_current = (results['Solar']['current'] or 0) + (results['Wind']['current'] or 0)
+                st.metric(
+                    label=f"Total {curr_month_name}",
+                    value=f"€{total_current:.2f}"
+                )
+            
+            with total_col2:
+                total_last = (results['Solar']['last'] or 0) + (results['Wind']['last'] or 0)
+                st.metric(
+                    label=f"Total {last_month_name}",
+                    value=f"€{total_last:.2f}"
+                )
+                
+        except Exception as e:
+            st.error(f"Error calculating PnL: {e}")
+            import traceback
+            st.error(traceback.format_exc())
+    else:
+        st.info("Please log in using the sidebar to access the PnL.")
+
+
+# Note: You need to have these functions/classes defined elsewhere:
+# - PredicoClient (with authenticate(), get_market_sessions(), get_challenges() methods)
+# - add_daily_payout() function
 
 def submission_viewer():
     """Display submission details and visualizations with proper authentication."""
@@ -1469,7 +1710,7 @@ def benchmark():
 
 def overview():
     """Display submission details and visualizations with proper authentication."""
-    st.title("PnL Viewer")
+    #st.title("PnL Viewer")
     
     # Initialize session state variables
     if 'predico_client' not in st.session_state:
