@@ -1800,11 +1800,15 @@ def calculate_two_month_pnl(client, market_sessions, resource_id):
         open_ts = pd.to_datetime(session["open_ts"]).tz_convert("CET")
         forecast_date = (open_ts + pd.Timedelta(days=1)).normalize()
 
-        # sessions sorted desc -> once older than last month, break
+        # sessions sorted desc -> once older than last month, stop
         if forecast_date < last_start:
             break
 
-        payout =  fetch_daily_payout_for_session(client, session["id"], resource_id)
+        forecast_date_str = forecast_date.strftime("%Y-%m-%d")
+
+        payout = fetch_daily_payout_for_session(
+            client, session["id"], resource_id, forecast_date_str
+        )
         if payout is not None:
             payouts.append({"market_date": forecast_date, "daily_payout": payout})
 
@@ -1812,6 +1816,7 @@ def calculate_two_month_pnl(client, market_sessions, resource_id):
         return 0.0, 0.0
 
     df = pd.DataFrame(payouts)
+
     cur_mask = df["market_date"] >= current_start
     last_mask = (df["market_date"] >= last_start) & (df["market_date"] <= last_end)
 
@@ -1820,8 +1825,10 @@ def calculate_two_month_pnl(client, market_sessions, resource_id):
     return float(cur_pnl), float(last_pnl)
 
 
+
 @st.cache_data(show_spinner=False)
-def fetch_daily_payout_for_session(_client, session_id, resource_id):
+def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_date_str):
+    """Return daily payout for one (session, resource, forecast_date)."""
     try:
         challenges = _client.get_challenges(session_id, resource_id)
         if not challenges:
@@ -1829,19 +1836,25 @@ def fetch_daily_payout_for_session(_client, session_id, resource_id):
 
         challenge_id = challenges[0]["id"]
         url_sc = "https://predico-elia.inesctec.pt/api/v1/market/challenge/submission-scores"
-        sc_resp = requests.get(url_sc, params={"challenge": challenge_id}, headers=_client.headers)
+        sc_resp = requests.get(url_sc, params={"challenge": challenge_id},
+                               headers=_client.headers)
         sc_data = sc_resp.json()["data"]["personal_metrics"]
         if not sc_data:
             return None
 
         df_scores = pd.DataFrame(sc_data)
+        # REQUIRED for add_daily_payout
+        df_scores["market_date"] = forecast_date_str
+
         df_scores = add_daily_payout(df_scores)
         if "daily_payout" not in df_scores.columns or df_scores.empty:
             return None
 
         return float(df_scores["daily_payout"].iloc[0])
-    except Exception:
+    except Exception as e:
+        print(f"Error calculating daily payout: {e}")
         return None
+
 
 
 
