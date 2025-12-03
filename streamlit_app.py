@@ -1762,6 +1762,18 @@ def overview():
             "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
         }
 
+        df = fetch_xlsx_report_df(client, "2025-12-01", "2025-12-05",
+                          "5792ca63-2051-4186-8c5c-7167ee1c6c6f")
+        if not df.empty:
+            st.dataframe(df)
+            st.download_button("Download XLSX",
+                            data=df.to_excel(index=False, engine="openpyxl"),
+                            file_name="report.xlsx")
+        else:
+            st.warning("No data found or download failed.")
+
+
+
         with st.spinner("Calculating PnL (current + last month)..."):
             cur_solar, last_solar = calculate_two_month_pnl(
                 client, market_sessions, resource_ids["Solar"]
@@ -1846,6 +1858,8 @@ def calculate_two_month_pnl(client, market_sessions, resource_id, n_jobs=8):
 
 
 
+
+
 @st.cache_data(show_spinner=False)
 def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_date_str):
     """Return daily payout for one (session, resource, forecast_date)."""
@@ -1874,6 +1888,41 @@ def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_da
     except Exception as e:
         print(f"Error calculating daily payout: {e}")
         return None
+
+import io
+import requests
+
+import io
+import pandas as pd
+import requests
+
+def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
+                         ensemble_model="weighted_avg",
+                         include_ensemble=False, anonymize=False):
+    """
+    Fetch XLSX report from Predico API and return a DataFrame.
+    """
+    try:
+        url = "https://predico-elia.inesctec.pt/api/v1/market/report/xlsx-scores"
+        params = {
+            "start_date": start_date,
+            "end_date": end_date,
+            "ensemble_model": ensemble_model,
+            "include_ensemble": str(include_ensemble).lower(),
+            "anonymize": str(anonymize).lower(),
+            "resource": resource_id,
+        }
+
+        headers = _client.headers.copy()
+        headers["accept"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+        resp = requests.get(url, headers=headers, params=params)
+        resp.raise_for_status()
+
+        return pd.read_excel(io.BytesIO(resp.content))
+    except Exception as e:
+        print(f"Error fetching XLSX report: {e}")
+        return pd.DataFrame()
 
 
 
