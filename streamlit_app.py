@@ -610,6 +610,7 @@ def overview():
         st.info("Please log in using the sidebar to access the PnL.")
         return
 
+
     client = st.session_state.predico_client
 
     try:
