@@ -571,24 +571,23 @@ def calculate_all_pnl_parallel(client, market_sessions, resource_options):
     return results, current_month, current_year, last_month, last_month_year
 
 
+
+import calendar
+from datetime import date, timedelta
+
 def overview():
-    """Display submission details and visualizations with proper authentication."""
-    
-    # Initialize session state variables
     if 'predico_client' not in st.session_state:
         st.session_state.predico_client = None
         st.session_state.is_authenticated = False
-    
-    # Authentication section
+
+    # --- AUTH ---
     with st.sidebar:
         st.header("Authentication")
-        
         if not st.session_state.is_authenticated:
             with st.form("login_form"):
-                email = st.text_input("Email", type="default")
+                email = st.text_input("Email")
                 password = st.text_input("Password", type="password")
                 submit_button = st.form_submit_button("Login")
-                
                 if submit_button and email and password:
                     with st.spinner("Authenticating..."):
                         client = PredicoClient(email, password)
@@ -601,129 +600,76 @@ def overview():
                             st.error("Authentication failed. Please check your credentials.")
         else:
             st.success(f"Logged in as: {st.session_state.predico_client.email}")
-            
             if st.button("Logout"):
                 st.session_state.predico_client = None
                 st.session_state.is_authenticated = False
                 st.success("Logged out successfully!")
                 st.rerun()
-    
-    # Main content - only show when authenticated
-    if st.session_state.is_authenticated and st.session_state.predico_client:
-        client = st.session_state.predico_client
-        
-        try:
-            with st.spinner("Fetching market sessions..."):
-                market_sessions = client.get_market_sessions(status="finished")
-                
-                if not market_sessions:
-                    st.error("No market sessions available.")
-                    return
-                
-                market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
-                
-                resource_options = {
-                    "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
-                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"
-                }
 
-            with st.spinner("Calculating PnL (this may take a moment)..."):
-                results, curr_month, curr_year, last_month, last_year = calculate_all_pnl_parallel(
-                    client, market_sessions, resource_options
-                )
-            
-            # Display results in a clean layout
-            st.header("📊 PnL Summary")
-            
-            # Month names for display
-            month_names = {
-                1: "January", 2: "February", 3: "March", 4: "April",
-                5: "May", 6: "June", 7: "July", 8: "August",
-                9: "September", 10: "October", 11: "November", 12: "December"
-            }
-            
-            curr_month_name = f"{month_names[curr_month]} {curr_year}"
-            last_month_name = f"{month_names[last_month]} {last_year}"
-            
-            # Create two columns for Solar and Wind
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.subheader("☀️ Solar")
-                solar_current = results['Solar']['current']
-                solar_last = results['Solar']['last']
-                
-                if solar_current is not None:
-                    delta = None
-                    if solar_last is not None and solar_last != 0:
-                        delta = f"{((solar_current - solar_last) / abs(solar_last)) * 100:.1f}%"
-                    st.metric(
-                        label=f"Current Month ({curr_month_name})",
-                        value=f"€{solar_current:.2f}",
-                        delta=delta
-                    )
-                else:
-                    st.warning(f"Could not calculate {curr_month_name} PnL")
-                
-                if solar_last is not None:
-                    st.metric(
-                        label=f"Last Month ({last_month_name})",
-                        value=f"€{solar_last:.2f}"
-                    )
-                else:
-                    st.warning(f"Could not calculate {last_month_name} PnL")
-            
-            with col2:
-                st.subheader("💨 Wind")
-                wind_current = results['Wind']['current']
-                wind_last = results['Wind']['last']
-                
-                if wind_current is not None:
-                    delta = None
-                    if wind_last is not None and wind_last != 0:
-                        delta = f"{((wind_current - wind_last) / abs(wind_last)) * 100:.1f}%"
-                    st.metric(
-                        label=f"Current Month ({curr_month_name})",
-                        value=f"€{wind_current:.2f}",
-                        delta=delta
-                    )
-                else:
-                    st.warning(f"Could not calculate {curr_month_name} PnL")
-                
-                if wind_last is not None:
-                    st.metric(
-                        label=f"Last Month ({last_month_name})",
-                        value=f"€{wind_last:.2f}"
-                    )
-                else:
-                    st.warning(f"Could not calculate {last_month_name} PnL")
-            
-            # Total summary
-            st.divider()
-            st.subheader("📈 Combined Totals")
-            
-            total_col1, total_col2 = st.columns(2)
-            
-            with total_col1:
-                total_current = (results['Solar']['current'] or 0) + (results['Wind']['current'] or 0)
-                st.metric(
-                    label=f"Total {curr_month_name}",
-                    value=f"€{total_current:.2f}"
-                )
-            
-            with total_col2:
-                total_last = (results['Solar']['last'] or 0) + (results['Wind']['last'] or 0)
-                st.metric(
-                    label=f"Total {last_month_name}",
-                    value=f"€{total_last:.2f}"
-                )
-                
-        except Exception as e:
-            st.error(f"Error calculating PnL: {e}")
-            import traceback
-            st.error(traceback.format_exc())
-    else:
+    if not (st.session_state.is_authenticated and st.session_state.predico_client):
         st.info("Please log in using the sidebar to access the PnL.")
+        return
+
+    client = st.session_state.predico_client
+
+    try:
+
+        # --- Month selector (start_date / end_date) ---
+        today = date.today()
+        years = list(range(today.year - 3, today.year + 1))
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+
+        col_y, col_m = st.columns(2)
+        with col_y:
+            year = st.selectbox("Year", years, index=len(years) - 1)
+        with col_m:
+            month_name = st.selectbox("Month", month_names, index=today.month - 1)
+        month = month_names.index(month_name) + 1
+
+        start_date = date(year, month, 1)
+        if year == today.year and month == today.month:
+            # current month → end date = yesterday (but not before start_date)
+            end_candidate = today - timedelta(days=1)
+            end_date = max(start_date, end_candidate)
+        else:
+            # other months → last calendar day
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = date(year, month, last_day)
+
+        st.caption(f"Selected period: {start_date} → {end_date}")
+
+        resource_ids = {
+            "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
+            "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
+        }
+
+        # --- XLSX report for Solar (example) ---
+        resource_id = resource_ids["Solar"]
+        content = fetch_xlsx_report_df(
+            client,
+            start_date,
+            end_date,
+            resource_id,
+            ensemble_model="weighted_avg",
+            include_ensemble=False,
+            anonymize=False,
+        )
+        df = get_pnl(content)
+
+        if df is not None and not df.empty:
+            st.subheader("Solar Report")
+            st.dataframe(df)
+
+        else:
+            st.warning("No data found or download failed.")
+
+    except Exception as e:
+        st.error(f"Error PnL: {e}")
+        import traceback
+        st.error(traceback.format_exc())
 
 
 # Note: You need to have these functions/classes defined elsewhere:
@@ -1709,115 +1655,6 @@ def benchmark():
         st.error(traceback.format_exc())
 
 
-
-
-import calendar
-from datetime import date, timedelta
-def overview():
-    if 'predico_client' not in st.session_state:
-        st.session_state.predico_client = None
-        st.session_state.is_authenticated = False
-
-    # --- AUTH ---
-    with st.sidebar:
-        st.header("Authentication")
-        if not st.session_state.is_authenticated:
-            with st.form("login_form"):
-                email = st.text_input("Email")
-                password = st.text_input("Password", type="password")
-                submit_button = st.form_submit_button("Login")
-                if submit_button and email and password:
-                    with st.spinner("Authenticating..."):
-                        client = PredicoClient(email, password)
-                        if client.authenticate():
-                            st.session_state.predico_client = client
-                            st.session_state.is_authenticated = True
-                            st.success("Logged in successfully!")
-                            st.rerun()
-                        else:
-                            st.error("Authentication failed. Please check your credentials.")
-        else:
-            st.success(f"Logged in as: {st.session_state.predico_client.email}")
-            if st.button("Logout"):
-                st.session_state.predico_client = None
-                st.session_state.is_authenticated = False
-                st.success("Logged out successfully!")
-                st.rerun()
-
-    if not (st.session_state.is_authenticated and st.session_state.predico_client):
-        st.info("Please log in using the sidebar to access the PnL.")
-        return
-
-    client = st.session_state.predico_client
-
-    try:
-        with st.spinner("Fetching market sessions..."):
-            market_sessions = client.get_market_sessions(status="finished")
-        if not market_sessions:
-            st.error("No market sessions available.")
-            return
-
-        # newest first
-        market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
-
-        # --- Month selector (start_date / end_date) ---
-        today = date.today()
-        years = list(range(today.year - 3, today.year + 1))
-        month_names = [
-            "January", "February", "March", "April", "May", "June",
-            "July", "August", "September", "October", "November", "December"
-        ]
-
-        col_y, col_m = st.columns(2)
-        with col_y:
-            year = st.selectbox("Year", years, index=len(years) - 1)
-        with col_m:
-            month_name = st.selectbox("Month", month_names, index=today.month - 1)
-        month = month_names.index(month_name) + 1
-
-        start_date = date(year, month, 1)
-        if year == today.year and month == today.month:
-            # current month → end date = yesterday (but not before start_date)
-            end_candidate = today - timedelta(days=1)
-            end_date = max(start_date, end_candidate)
-        else:
-            # other months → last calendar day
-            last_day = calendar.monthrange(year, month)[1]
-            end_date = date(year, month, last_day)
-
-        st.caption(f"Selected period: {start_date} → {end_date}")
-
-        resource_ids = {
-            "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
-            "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
-        }
-
-        # --- XLSX report for Solar (example) ---
-        resource_id = resource_ids["Solar"]
-        df = fetch_xlsx_report_df(
-            client,
-            start_date,
-            end_date,
-            resource_id,
-            ensemble_model="weighted_avg",
-            include_ensemble=False,
-            anonymize=False,
-        )
-
-        if df is not None and not df.empty:
-            st.subheader("Solar Report")
-            st.dataframe(df)
-
-        else:
-            st.warning("No data found or download failed.")
-
-    except Exception as e:
-        st.error(f"Error PnL: {e}")
-        import traceback
-        st.error(traceback.format_exc())
-
-
-
 def _month_boundaries_cet():
     now = pd.Timestamp.now(tz="CET").normalize()
     current_start = now.replace(day=1)
@@ -1875,10 +1712,6 @@ def calculate_two_month_pnl(client, market_sessions, resource_id, n_jobs=8):
     cur_pnl = df.loc[cur_mask, "daily_payout"].sum()
     last_pnl = df.loc[last_mask, "daily_payout"].sum()
     return float(cur_pnl), float(last_pnl)
-
-
-
-
 
 @st.cache_data(show_spinner=False)
 def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_date_str):
