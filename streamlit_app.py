@@ -1710,12 +1710,15 @@ def benchmark():
 
 
 
+
+import calendar
+from datetime import date, timedelta
 def overview():
     if 'predico_client' not in st.session_state:
         st.session_state.predico_client = None
         st.session_state.is_authenticated = False
 
-    # --- AUTH (unchanged) ---
+    # --- AUTH ---
     with st.sidebar:
         st.header("Authentication")
         if not st.session_state.is_authenticated:
@@ -1757,45 +1760,62 @@ def overview():
         # newest first
         market_sessions = sorted(market_sessions, key=lambda x: x["open_ts"], reverse=True)
 
+        # --- Month selector (start_date / end_date) ---
+        today = date.today()
+        years = list(range(today.year - 3, today.year + 1))
+        month_names = [
+            "January", "February", "March", "April", "May", "June",
+            "July", "August", "September", "October", "November", "December"
+        ]
+
+        col_y, col_m = st.columns(2)
+        with col_y:
+            year = st.selectbox("Year", years, index=len(years) - 1)
+        with col_m:
+            month_name = st.selectbox("Month", month_names, index=today.month - 1)
+        month = month_names.index(month_name) + 1
+
+        start_date = date(year, month, 1)
+        if year == today.year and month == today.month:
+            # current month → end date = yesterday (but not before start_date)
+            end_candidate = today - timedelta(days=1)
+            end_date = max(start_date, end_candidate)
+        else:
+            # other months → last calendar day
+            last_day = calendar.monthrange(year, month)[1]
+            end_date = date(year, month, last_day)
+
+        st.caption(f"Selected period: {start_date} → {end_date}")
+
         resource_ids = {
             "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
             "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
         }
 
-        df = fetch_xlsx_report_df(client, "2025-12-01", "2025-12-05",
-                          "5792ca63-2051-4186-8c5c-7167ee1c6c6f")
-        if not df.empty:
+        # --- XLSX report for Solar (example) ---
+        resource_id = resource_ids["Solar"]
+        df = fetch_xlsx_report_df(
+            client,
+            start_date,
+            end_date,
+            resource_id,
+            ensemble_model="weighted_avg",
+            include_ensemble=False,
+            anonymize=False,
+        )
+
+        if df is not None and not df.empty:
+            st.subheader("Solar Report")
             st.dataframe(df)
-            st.download_button("Download XLSX",
-                            data=df.to_excel(index=False, engine="openpyxl"),
-                            file_name="report.xlsx")
+
         else:
             st.warning("No data found or download failed.")
-
-
-
-        with st.spinner("Calculating PnL (current + last month)..."):
-            cur_solar, last_solar = calculate_two_month_pnl(
-                client, market_sessions, resource_ids["Solar"]
-            )
-            cur_wind, last_wind = calculate_two_month_pnl(
-                client, market_sessions, resource_ids["Wind"]
-            )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Solar")
-            st.metric("Current month PnL", f"€{cur_solar:,.2f}")
-            st.metric("Last month PnL", f"€{last_solar:,.2f}")
-        with col2:
-            st.subheader("Wind")
-            st.metric("Current month PnL", f"€{cur_wind:,.2f}")
-            st.metric("Last month PnL", f"€{last_wind:,.2f}")
 
     except Exception as e:
         st.error(f"Error PnL: {e}")
         import traceback
         st.error(traceback.format_exc())
+
 
 
 def _month_boundaries_cet():
@@ -1889,8 +1909,6 @@ def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_da
         print(f"Error calculating daily payout: {e}")
         return None
 
-import io
-import requests
 
 import io
 import pandas as pd
@@ -1914,16 +1932,149 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         }
 
         headers = _client.headers.copy()
-        headers["accept"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        headers['referer'] = "https://predico-elia.inesctec.pt/dashboard"
 
         resp = requests.get(url, headers=headers, params=params)
         resp.raise_for_status()
 
-        return pd.read_excel(io.BytesIO(resp.content))
+        return io.BytesIO(resp.content)
     except Exception as e:
         print(f"Error fetching XLSX report: {e}")
-        return pd.DataFrame()
+        return None
 
+
+
+def calculate_pnl(
+    rmse_scores: pd.DataFrame,
+    rmse_rank: pd.DataFrame,
+    daily_budget_total: float = 1000.0,
+    elite_monthly_budget: float = 1500.0,
+    challenger_monthly_budget: float = 700.0,
+    runnerup_reward: float = 50.0,
+    peak_error_bonus: float = 250.0,
+    prob: bool = False,
+) -> pd.DataFrame:
+    """
+    Total PnL per forecaster for deterministic track.
+    - leagues (elite/challenger) recomputed cumulatively from month start each day
+    - elite/challenger daily pots are (budget_total / n_days)
+    """
+
+    # --- identify date columns ---
+    meta_cols = {"forecaster", "is_fixed_payment", "average"}
+    date_cols = [c for c in rmse_rank.columns if c not in meta_cols]
+    # ensure sorted by date
+    date_cols = sorted(date_cols)
+
+    scores_idx = rmse_scores.set_index("forecaster")
+    rank_idx = rmse_rank.set_index("forecaster")
+
+    # --- monthly league rewards (final month ranking based on RMSE) ---
+    score_date_cols = [c for c in rmse_scores.columns if c != "forecaster"]
+    avg_rmse = scores_idx[score_date_cols].mean(axis=1, skipna=True)
+    monthly_order = avg_rmse.sort_values().index
+    monthly_rank = pd.Series(
+        np.arange(1, len(monthly_order) + 1),
+        index=monthly_order,
+        name="monthly_rank",
+    )
+
+    elite_pct = {1: 0.35, 2: 0.21, 3: 0.18, 4: 0.14, 5: 0.12}
+
+    def league_reward(r):
+        if r in elite_pct:
+            return elite_monthly_budget * elite_pct[r]
+        if 6 <= r <= 10:
+            return challenger_monthly_budget * 0.20
+        if r == 11:
+            return runnerup_reward
+        return 0.0
+
+    monthly_league = monthly_rank.map(league_reward)
+
+    # ---------- daily rewards (just top-5 per day globally) ----------
+    n_days = len(date_cols)
+    if n_days == 0:
+        raise ValueError("No date columns found in rmse_rank.")
+    daily_rewards_total = pd.Series(0.0, index=rank_idx.index)
+    weights = np.array([0.40, 0.27, 0.18, 0.10, 0.05])
+    daily_budget_per_day = daily_budget_total / n_days
+    for d in date_cols:
+        day_ranks = rank_idx[d].dropna().sort_values()  # lower rank = better
+        if day_ranks.empty:
+            continue
+
+        top5 = day_ranks.iloc[:5]
+        w = weights[:len(top5)]
+        daily_rewards_total.loc[top5.index] += w * daily_budget_per_day
+
+    # --- peak error bonus (lowest max RMSE over month) ---
+    max_rmse = scores_idx[score_date_cols].max(axis=1, skipna=True).sort_values()
+    peak_error_winner = max_rmse.idxmin()
+    peak_bonus = pd.Series(0.0, index=monthly_league.index)
+    if peak_error_winner in peak_bonus.index:
+        peak_bonus.loc[peak_error_winner] = peak_error_bonus
+
+    # --- assemble result ---
+    res = pd.DataFrame(
+        {
+            "forecaster": monthly_league.index,
+            "monthly_league": monthly_league.values,
+            "daily_rewards": daily_rewards_total.reindex(monthly_league.index).fillna(0.0).values,
+            "peak_bonus": peak_bonus.values,
+        }
+    )
+
+    if prob:
+        res["peak_bonus"] = 0.
+    res["total_pnl"] = res[["monthly_league", "daily_rewards", "peak_bonus"]].sum(axis=1)
+    return res
+
+
+def adjust_rank(rmse_rank):
+    mask = rmse_rank["is_fixed_payment"]  # True = to remove
+    rank_cols = [c for c in rmse_rank.columns
+                 if c not in ["forecaster", "is_fixed_payment"]]
+
+    for c in rank_cols:
+        # ranks of fixed-payment forecasters in this column
+        removed_ranks = (
+            rmse_rank.loc[mask, c]
+            .dropna()
+            .unique()
+        )
+        for r in np.sort(removed_ranks):
+            # shift only remaining forecasters that are worse than r
+            rmse_rank.loc[~mask & (rmse_rank[c] > r), c] -= 1
+
+        # finally "remove" fixed-payment forecasters from the ranking
+        rmse_rank.loc[mask, c] = len(rmse_rank)+2
+    return rmse_rank.loc[rmse_rank['is_fixed_payment'] == False]
+
+def adjust_score(rmse_scores):
+    return rmse_scores.loc[rmse_scores['is_fixed_payment'] == False]
+
+def get_pnl(content):
+    rmse_scores = adjust_score(pd.read_excel(content, sheet_name="q50-rmse-scores").copy())
+    rmse_rank = adjust_rank(pd.read_excel(content, sheet_name="q50-rmse-rank").copy())
+    deter_pnl = calculate_pnl(rmse_rank=rmse_rank, rmse_scores=rmse_scores, elite_monthly_budget=1500.0,
+                              prob=False).set_index('forecaster').round(1).add_suffix('_deter')
+
+
+    rmse_scores = adjust_score(pd.read_excel(content, sheet_name="q10q90-winkler-scores").copy())
+    rmse_rank = adjust_rank(pd.read_excel(content, sheet_name="q10q90-winkler-rank").copy())
+    prob_pnl = calculate_pnl(rmse_rank=rmse_rank, rmse_scores=rmse_scores, elite_monthly_budget=1750.0,
+                             prob=True).set_index('forecaster').round(1).add_suffix('_prob')
+
+    global_pnl = deter_pnl.merge(prob_pnl, on='forecaster')
+
+    global_pnl['Global PnL'] = global_pnl['total_pnl_deter'] + global_pnl['total_pnl_prob']
+
+    global_pnl = global_pnl[global_pnl.columns[::-1]].round(1)
+
+    global_pnl.sort_values(by='Global PnL', inplace=True,ascending=False)
+
+    return global_pnl
 
 
 
