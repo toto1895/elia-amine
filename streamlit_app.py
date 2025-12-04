@@ -664,7 +664,12 @@ def overview():
 
         if df is not None and not df.empty:
             st.subheader("Solar - estimate End of month")
-            st.dataframe(df)
+            st.dataframe(
+                df.style.set_properties(
+                    subset=[df.columns[0]], 
+                    **{"font-weight": "bold", "color": "blue"}
+                )
+)
 
         resource_id = resource_ids["Wind"]
         content = fetch_xlsx_report_df(
