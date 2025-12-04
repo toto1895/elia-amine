@@ -15,6 +15,7 @@ class PredicoClient:
         self.access_token = None
         self.headers = None
         self.user_id = None
+        self.username = None
 
     def decode_jwt(self, token):
         """
@@ -65,6 +66,8 @@ class PredicoClient:
                 decoded_token = self.decode_jwt(self.access_token)
                 if decoded_token and "user_id" in decoded_token:
                     self.user_id = decoded_token["user_id"]
+
+                self.username = response.json().get("user").get('username')
 
                 # Set up headers with the new token
                 self.headers = {

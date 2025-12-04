@@ -641,6 +641,8 @@ def overview():
 
         st.caption(f"Selected period: {start_date} → {end_date}")
 
+        st.warning(f'Username: {client.username}')
+
         resource_ids = {
             "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
             "Wind":  "491949aa-8662-4010-8a29-75f4267a76c2",
