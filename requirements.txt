@@ -8,3 +8,4 @@ gcsfs
 st-files-connection
 google-cloud-run
 joblib
+openpyxl
