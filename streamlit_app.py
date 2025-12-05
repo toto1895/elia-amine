@@ -650,26 +650,6 @@ def overview():
         }
 
         # --- XLSX report for Solar (example) ---
-        resource_id = resource_ids["Solar"]
-        content = fetch_xlsx_report_df(
-            client,
-            start_date,
-            end_date,
-            resource_id,
-            ensemble_model="weighted_avg",
-            include_ensemble=False,
-            anonymize=False,
-        )
-        df = get_pnl(content)
-
-        if df is not None and not df.empty:
-            st.subheader("Solar - estimate End of month")
-            st.dataframe(
-                df.style.set_properties(
-                    subset=[df.columns[0]], 
-                    **{"font-weight": "bold", "color": "blue"}
-                )
-)
 
         resource_id = resource_ids["Wind"]
         content = fetch_xlsx_report_df(
@@ -685,6 +665,22 @@ def overview():
 
         if df is not None and not df.empty:
             st.subheader("Wind - estimate End of month")
+            st.dataframe(df)
+
+        resource_id = resource_ids["Solar"]
+        content = fetch_xlsx_report_df(
+            client,
+            start_date,
+            end_date,
+            resource_id,
+            ensemble_model="weighted_avg",
+            include_ensemble=False,
+            anonymize=False,
+        )
+        df = get_pnl(content)
+
+        if df is not None and not df.empty:
+            st.subheader("Solar - estimate End of month")
             st.dataframe(df)
 
         else:
