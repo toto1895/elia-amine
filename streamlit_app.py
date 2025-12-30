@@ -1767,6 +1767,8 @@ import pandas as pd
 
 import io
 import time
+import io
+import time
 import requests
 import pandas as pd
 import streamlit as st
@@ -1780,9 +1782,6 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
                          timeout_s=300, poll_every_s=2.0):
-    """
-    Queue export -> poll exports -> download via /api/v1/data/exports/{id}/download
-    """
     try:
         start_date_s = str(start_date)
         end_date_s = str(end_date)
@@ -1794,7 +1793,6 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         # 1) queue
         queued_at = pd.Timestamp.utcnow()
         st.info("📤 Queuing XLSX export request...")
-
         params = {
             "resource": resource_id,
             "start_date": start_date_s,
@@ -1803,24 +1801,43 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             "anonymize": str(anonymize).lower(),
             "ensemble_model": ensemble_model,
         }
-
         r = requests.get(QUEUE_ENDPOINT, headers=headers, params=params, timeout=60)
         st.info(f"Queue response: HTTP {r.status_code}")
-
         if r.status_code not in (200, 202):
-            st.error(f"Queue failed: {r.text}")
+            st.error(f"Queue failed body: {r.text[:500]}")
             r.raise_for_status()
 
         # 2) poll exports
         st.info("⏳ Waiting for export to be generated...")
 
+        def _normalize_exports(payload):
+            # Accept common shapes: list | {"results":list} | {"data":list}
+            if isinstance(payload, list):
+                items = payload
+            elif isinstance(payload, dict):
+                if isinstance(payload.get("results"), list):
+                    items = payload["results"]
+                elif isinstance(payload.get("data"), list):
+                    items = payload["data"]
+                else:
+                    # sometimes a single object
+                    items = [payload]
+            else:
+                items = []
+
+            # keep only dict entries (avoid 'str' object has no attribute get)
+            return [x for x in items if isinstance(x, dict)]
+
         def _list_exports():
             rr = requests.get(EXPORTS_ENDPOINT, headers=headers, timeout=60)
             rr.raise_for_status()
-            data = rr.json()
-            return data["results"] if isinstance(data, dict) and "results" in data else data
+            payload = rr.json()
+            exports = _normalize_exports(payload)
+            if not exports:
+                st.info(f"Exports payload type={type(payload).__name__} keys={list(payload.keys()) if isinstance(payload, dict) else None}")
+            return exports
 
-        def _matches(e):
+        def _matches(e: dict) -> bool:
             return (
                 e.get("export_type") == "market_report"
                 and e.get("file_type") == "xlsx"
@@ -1836,8 +1853,9 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             exports = [e for e in _list_exports() if _matches(e)]
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
 
-            st.info(f"Found {len(exports)} matching exports")
+            st.info(f"Found {len(exports)} matching exports (dict entries)")
 
+            # choose newest export created after we queued (prevents picking old completed ones)
             for e in exports:
                 try:
                     created_at = pd.to_datetime(e.get("created_at"), utc=True)
@@ -1848,7 +1866,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                     continue
 
             if export:
-                st.info(f"Export status: {export.get('status')} (id={export.get('id')})")
+                st.info(f"Candidate export: id={export.get('id')} status={export.get('status')} created_at={export.get('created_at')}")
                 if export.get("status") == "completed":
                     break
                 if export.get("status") in ("failed", "revoked"):
@@ -1858,35 +1876,27 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             time.sleep(poll_every_s)
 
         if not export or export.get("status") != "completed":
-            st.warning("No completed export found before timeout")
+            st.warning(f"Timeout/no completed export. Last candidate: {export}")
             return None
 
-        # 3) download
         export_id = export.get("id")
         if export_id is None:
-            st.error("Export has no ID, cannot download")
+            st.error(f"Completed export has no id: {export}")
             return None
 
+        # 3) download EXACT endpoint you observed
         download_url = f"{API_BASE}/api/v1/data/exports/{export_id}/download"
-        st.info(f"⬇️ Downloading XLSX from {download_url}")
+        st.info(f"⬇️ Downloading XLSX from: {download_url}")
 
         dl = requests.get(download_url, headers=headers, timeout=120)
-
-        st.info(
-            f"Download response: HTTP {dl.status_code}, "
-            f"content-type={dl.headers.get('content-type')}, "
-            f"size={len(dl.content)} bytes"
-        )
+        st.info(f"Download response: HTTP {dl.status_code}, content-type={dl.headers.get('content-type')}, size={len(dl.content)} bytes")
 
         if dl.status_code != 200:
-            st.error("Download failed")
+            st.error(f"Download failed body: {dl.text[:500]}")
             return None
 
         if not dl.content.startswith(b"PK"):
-            st.error(
-                "Downloaded file is not XLSX (ZIP header missing). "
-                f"First bytes: {dl.content[:50]}"
-            )
+            st.error(f"Not XLSX/ZIP. First bytes: {dl.content[:80]}")
             return None
 
         st.info("✅ XLSX download successful")
@@ -1895,6 +1905,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
     except Exception as e:
         st.error(f"Error fetching XLSX report: {e}")
         return None
+
 
 
 def calculate_pnl(
