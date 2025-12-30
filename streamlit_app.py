@@ -1763,8 +1763,8 @@ def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_da
         return None
 
 
-import io
 import pandas as pd
+
 import io
 import time
 import requests
@@ -1773,133 +1773,110 @@ API_BASE = "https://predico-elia.inesctec.pt"
 QUEUE_ENDPOINT = f"{API_BASE}/api/v1/market/report/xlsx-scores"
 EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
 
-
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
-                         timeout_s=240, poll_every_s=15.0):
+                         timeout_s=300, poll_every_s=2.0):
     """
-    Queue export -> poll exports list -> download XLSX bytes.
-    Returns io.BytesIO or None.
+    Queue export -> poll exports list -> download via /api/v1/data/exports/{id}/download
+    Returns io.BytesIO (xlsx) or None.
     """
     try:
+        # Ensure string dates (YYYY-MM-DD)
+        start_date_s = str(start_date)
+        end_date_s = str(end_date)
+
+        headers = _client.headers.copy()
+        headers["referer"] = f"{API_BASE}/files"
+        headers["accept"] = "application/json, text/plain, */*"
+
         # 1) queue
+        queued_at = pd.Timestamp.utcnow()  # requires pandas already imported in your file
         params = {
             "resource": resource_id,
-            "start_date": str(start_date),
-            "end_date": str(end_date),
+            "start_date": start_date_s,
+            "end_date": end_date_s,
             "include_ensemble": str(include_ensemble).lower(),
             "anonymize": str(anonymize).lower(),
             "ensemble_model": ensemble_model,
         }
-        headers = _client.headers.copy()
-        headers["referer"] = f"{API_BASE}/files"
-
         r = requests.get(QUEUE_ENDPOINT, headers=headers, params=params, timeout=60)
         if r.status_code not in (200, 202):
             r.raise_for_status()
 
-        time.sleep(30)
-        # 2) poll exports
+        # 2) poll exports (must be newer than queued_at to avoid picking an old file)
         def _list_exports():
-            rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
+            rr = requests.get(EXPORTS_ENDPOINT, headers=headers, timeout=60)
             rr.raise_for_status()
             data = rr.json()
             return data["results"] if isinstance(data, dict) and "results" in data else data
 
-        def _match(e):
-            return (
-                e.get("export_type") == "market_report"
-                and e.get("file_type") == "xlsx"
-                and e.get("resource_id") == resource_id
-                and str(e.get("start_date", "")).startswith(str(start_date))
-                and str(e.get("end_date", "")).startswith(str(end_date))
-            )
+        def _matches(e: dict) -> bool:
+            if e.get("export_type") != "market_report":
+                return False
+            if e.get("file_type") != "xlsx":
+                return False
+            if e.get("resource_id") != resource_id:
+                return False
+            if not str(e.get("start_date", "")).startswith(start_date_s):
+                return False
+            if not str(e.get("end_date", "")).startswith(end_date_s):
+                return False
+            return True
 
-        deadline = time.time() + timeout_s
         export = None
+        deadline = time.time() + timeout_s
         while time.time() < deadline:
-            exports = [e for e in _list_exports() if _match(e)]
+            exports = [e for e in _list_exports() if _matches(e)]
+
+            # sort newest first
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
-            if exports:
-                export = exports[0]
+
+            # pick the newest export created after we queued
+            for e in exports:
+                try:
+                    created_at = pd.to_datetime(e.get("created_at"), utc=True)
+                    if created_at >= queued_at:
+                        export = e
+                        break
+                except Exception:
+                    continue
+
+            if export:
                 status = export.get("status")
                 if status == "completed":
                     break
                 if status in ("failed", "revoked"):
                     raise RuntimeError(f"Export failed: {export}")
+
             time.sleep(poll_every_s)
 
         if not export or export.get("status") != "completed":
-            raise TimeoutError(f"Timed out waiting for export. Last seen: {export}")
+            print(f"[fetch_xlsx_report_df] No completed export found. Last seen export: {export}")
+            return None
 
         export_id = export.get("id")
-        file_path = export.get("file_path")
+        if export_id is None:
+            print(f"[fetch_xlsx_report_df] Export has no id: {export}")
+            return None
 
-        # 3) download
-        # Prefer API-style download endpoints (often what the UI uses before creating blob:)
-        candidates = []
-        if export_id is not None:
-            candidates += [
-                f"{API_BASE}/api/v1/data/exports/{export_id}/download/",
-                f"{API_BASE}/api/v1/data/exports/{export_id}/download",
-                f"{API_BASE}/api/v1/data/exports/{export_id}/file/",
-                f"{API_BASE}/api/v1/data/exports/{export_id}/file",
-            ]
+        # 3) download EXACT endpoint observed in devtools
+        download_url = f"{API_BASE}/api/v1/data/exports/{export_id}/download"
+        dl = requests.get(download_url, headers=headers, timeout=120)
+        if dl.status_code != 200:
+            print(f"[fetch_xlsx_report_df] Download failed {dl.status_code}: {download_url}")
+            return None
 
-        # Fallback: media paths (if your backend serves them directly)
-        if file_path:
-            candidates += [
-                f"{API_BASE}/api/mediafiles/{file_path.lstrip('/')}",
-                f"{API_BASE}/mediafiles/{file_path.lstrip('/')}",
-                f"{API_BASE}{file_path if str(file_path).startswith('/') else '/' + str(file_path)}",
-            ]
+        # XLSX is a zip => starts with PK
+        if not dl.content.startswith(b"PK"):
+            print(f"[fetch_xlsx_report_df] Download not XLSX/ZIP. content-type={dl.headers.get('content-type')} head={dl.content[:80]}")
+            return None
 
-        last_debug = None
-        for url in candidates:
-            try:
-                dl = requests.get(
-                    url,
-                    headers=_client.headers,
-                    timeout=120,
-                    allow_redirects=True,  # important: many setups 302 to the real file
-                )
-
-                last_debug = {
-                    "url": url,
-                    "final_url": dl.url,
-                    "status": dl.status_code,
-                    "content_type": dl.headers.get("content-type"),
-                    "head": dl.content[:32],
-                }
-
-                if dl.status_code != 200 or not dl.content:
-                    continue
-
-                # XLSX is a ZIP => starts with PK
-                if dl.content.startswith(b"PK"):
-                    return io.BytesIO(dl.content)
-
-                # Some endpoints return JSON containing a signed URL
-                ct = (dl.headers.get("content-type") or "").lower()
-                if "application/json" in ct:
-                    js = dl.json()
-                    signed = js.get("url") or js.get("download_url") or js.get("file_url")
-                    if signed:
-                        dl2 = requests.get(signed, headers=_client.headers, timeout=120, allow_redirects=True)
-                        if dl2.status_code == 200 and dl2.content.startswith(b"PK"):
-                            return io.BytesIO(dl2.content)
-
-            except Exception as e:
-                last_debug = {"url": url, "error": str(e)}
-                continue
-
-        raise RuntimeError(f"Could not download a valid XLSX. Last attempt: {last_debug}")
+        return io.BytesIO(dl.content)
 
     except Exception as e:
         print(f"Error fetching XLSX report: {e}")
         return None
-
 
 
 
