@@ -1768,21 +1768,22 @@ import pandas as pd
 import io
 import time
 import requests
+import pandas as pd
+import streamlit as st
 
 API_BASE = "https://predico-elia.inesctec.pt"
 QUEUE_ENDPOINT = f"{API_BASE}/api/v1/market/report/xlsx-scores"
 EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
+
 
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
                          timeout_s=300, poll_every_s=2.0):
     """
-    Queue export -> poll exports list -> download via /api/v1/data/exports/{id}/download
-    Returns io.BytesIO (xlsx) or None.
+    Queue export -> poll exports -> download via /api/v1/data/exports/{id}/download
     """
     try:
-        # Ensure string dates (YYYY-MM-DD)
         start_date_s = str(start_date)
         end_date_s = str(end_date)
 
@@ -1791,7 +1792,9 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         headers["accept"] = "application/json, text/plain, */*"
 
         # 1) queue
-        queued_at = pd.Timestamp.utcnow()  # requires pandas already imported in your file
+        queued_at = pd.Timestamp.utcnow()
+        st.info("📤 Queuing XLSX export request...")
+
         params = {
             "resource": resource_id,
             "start_date": start_date_s,
@@ -1800,39 +1803,41 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             "anonymize": str(anonymize).lower(),
             "ensemble_model": ensemble_model,
         }
+
         r = requests.get(QUEUE_ENDPOINT, headers=headers, params=params, timeout=60)
+        st.info(f"Queue response: HTTP {r.status_code}")
+
         if r.status_code not in (200, 202):
+            st.error(f"Queue failed: {r.text}")
             r.raise_for_status()
 
-        # 2) poll exports (must be newer than queued_at to avoid picking an old file)
+        # 2) poll exports
+        st.info("⏳ Waiting for export to be generated...")
+
         def _list_exports():
             rr = requests.get(EXPORTS_ENDPOINT, headers=headers, timeout=60)
             rr.raise_for_status()
             data = rr.json()
             return data["results"] if isinstance(data, dict) and "results" in data else data
 
-        def _matches(e: dict) -> bool:
-            if e.get("export_type") != "market_report":
-                return False
-            if e.get("file_type") != "xlsx":
-                return False
-            if e.get("resource_id") != resource_id:
-                return False
-            if not str(e.get("start_date", "")).startswith(start_date_s):
-                return False
-            if not str(e.get("end_date", "")).startswith(end_date_s):
-                return False
-            return True
+        def _matches(e):
+            return (
+                e.get("export_type") == "market_report"
+                and e.get("file_type") == "xlsx"
+                and e.get("resource_id") == resource_id
+                and str(e.get("start_date", "")).startswith(start_date_s)
+                and str(e.get("end_date", "")).startswith(end_date_s)
+            )
 
         export = None
         deadline = time.time() + timeout_s
+
         while time.time() < deadline:
             exports = [e for e in _list_exports() if _matches(e)]
-
-            # sort newest first
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
 
-            # pick the newest export created after we queued
+            st.info(f"Found {len(exports)} matching exports")
+
             for e in exports:
                 try:
                     created_at = pd.to_datetime(e.get("created_at"), utc=True)
@@ -1843,41 +1848,53 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                     continue
 
             if export:
-                status = export.get("status")
-                if status == "completed":
+                st.info(f"Export status: {export.get('status')} (id={export.get('id')})")
+                if export.get("status") == "completed":
                     break
-                if status in ("failed", "revoked"):
-                    raise RuntimeError(f"Export failed: {export}")
+                if export.get("status") in ("failed", "revoked"):
+                    st.error(f"Export failed: {export}")
+                    return None
 
             time.sleep(poll_every_s)
 
         if not export or export.get("status") != "completed":
-            print(f"[fetch_xlsx_report_df] No completed export found. Last seen export: {export}")
+            st.warning("No completed export found before timeout")
             return None
 
+        # 3) download
         export_id = export.get("id")
         if export_id is None:
-            print(f"[fetch_xlsx_report_df] Export has no id: {export}")
+            st.error("Export has no ID, cannot download")
             return None
 
-        # 3) download EXACT endpoint observed in devtools
         download_url = f"{API_BASE}/api/v1/data/exports/{export_id}/download"
+        st.info(f"⬇️ Downloading XLSX from {download_url}")
+
         dl = requests.get(download_url, headers=headers, timeout=120)
+
+        st.info(
+            f"Download response: HTTP {dl.status_code}, "
+            f"content-type={dl.headers.get('content-type')}, "
+            f"size={len(dl.content)} bytes"
+        )
+
         if dl.status_code != 200:
-            print(f"[fetch_xlsx_report_df] Download failed {dl.status_code}: {download_url}")
+            st.error("Download failed")
             return None
 
-        # XLSX is a zip => starts with PK
         if not dl.content.startswith(b"PK"):
-            print(f"[fetch_xlsx_report_df] Download not XLSX/ZIP. content-type={dl.headers.get('content-type')} head={dl.content[:80]}")
+            st.error(
+                "Downloaded file is not XLSX (ZIP header missing). "
+                f"First bytes: {dl.content[:50]}"
+            )
             return None
 
+        st.info("✅ XLSX download successful")
         return io.BytesIO(dl.content)
 
     except Exception as e:
-        print(f"Error fetching XLSX report: {e}")
+        st.error(f"Error fetching XLSX report: {e}")
         return None
-
 
 
 def calculate_pnl(
