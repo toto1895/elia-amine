@@ -1770,8 +1770,6 @@ import pandas as pd
 
 import io
 import time
-import io
-import time
 import requests
 import pandas as pd
 import streamlit as st
@@ -1898,6 +1896,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
     except Exception as e:
         st.error(f"Error fetching XLSX report: {e}")
         return None
+
 
 
 
