@@ -1765,35 +1765,107 @@ def fetch_daily_payout_for_session(_client, session_id, resource_id, forecast_da
 
 import io
 import pandas as pd
+import io
+import time
 import requests
+
+API_BASE = "https://predico-elia.inesctec.pt"
+QUEUE_ENDPOINT = f"{API_BASE}/api/v1/market/report/xlsx-scores"
+EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
+
 
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
-                         include_ensemble=False, anonymize=False):
+                         include_ensemble=False, anonymize=False,
+                         timeout_s=180, poll_every_s=2.0):
     """
-    Fetch XLSX report from Predico API and return a DataFrame.
+    Queue XLSX report export, wait until it's generated, then download it.
+    Returns: io.BytesIO (xlsx bytes) or None
     """
     try:
-        url = "https://predico-elia.inesctec.pt/api/v1/market/report/xlsx-scores"
+        # ---- 1) queue export (202 Accepted) ----
         params = {
-            "start_date": start_date,
-            "end_date": end_date,
-            "ensemble_model": ensemble_model,
+            "resource": resource_id,
+            "start_date": str(start_date),  # keep as YYYY-MM-DD
+            "end_date": str(end_date),
             "include_ensemble": str(include_ensemble).lower(),
             "anonymize": str(anonymize).lower(),
-            "resource": resource_id,
+            # keep if API accepts it; harmless if ignored
+            "ensemble_model": ensemble_model,
         }
 
         headers = _client.headers.copy()
-        headers['referer'] = "https://predico-elia.inesctec.pt/dashboard"
+        headers["referer"] = f"{API_BASE}/files"
 
-        resp = requests.get(url, headers=headers, params=params)
-        resp.raise_for_status()
+        r = requests.get(QUEUE_ENDPOINT, headers=headers, params=params, timeout=60)
+        if r.status_code not in (200, 202):
+            r.raise_for_status()
 
-        return io.BytesIO(resp.content)
+        # ---- 2) poll exports until completed ----
+        def _list_exports():
+            rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
+            rr.raise_for_status()
+            data = rr.json()
+            return data["results"] if isinstance(data, dict) and "results" in data else data
+
+        def _match(e: dict) -> bool:
+            return (
+                e.get("export_type") == "market_report"
+                and e.get("file_type") == "xlsx"
+                and e.get("resource_id") == resource_id
+                and str(e.get("start_date", "")).startswith(str(start_date))
+                and str(e.get("end_date", "")).startswith(str(end_date))
+            )
+
+        deadline = time.time() + timeout_s
+        export = None
+
+        while time.time() < deadline:
+            exports = [e for e in _list_exports() if _match(e)]
+            exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
+
+            if exports:
+                export = exports[0]
+                status = export.get("status")
+                if status == "completed":
+                    break
+                if status in ("failed", "revoked"):
+                    raise RuntimeError(f"Export failed: {export}")
+
+            time.sleep(poll_every_s)
+
+        if not export or export.get("status") != "completed":
+            raise TimeoutError(f"Timed out waiting for export. Last seen: {export}")
+
+        # ---- 3) download file ----
+        file_path = export.get("file_path")
+        if not file_path:
+            raise ValueError(f"Missing file_path in export: {export}")
+
+        # Try common serving paths (one of these should match what the UI uses)
+        candidates = [
+            f"{API_BASE}/api/mediafiles/{file_path.lstrip('/')}",
+            f"{API_BASE}/mediafiles/{file_path.lstrip('/')}",
+            f"{API_BASE}{file_path if file_path.startswith('/') else '/' + file_path}",
+        ]
+
+        last_err = None
+        for url in candidates:
+            try:
+                dl = requests.get(url, headers=_client.headers, timeout=120)
+                if dl.status_code == 200 and dl.content:
+                    return io.BytesIO(dl.content)
+                last_err = f"{url} -> {dl.status_code}"
+            except Exception as e:
+                last_err = f"{url} -> {e}"
+
+        raise RuntimeError(f"Could not download export. Last error: {last_err}")
+
     except Exception as e:
         print(f"Error fetching XLSX report: {e}")
         return None
+
+
 
 
 
