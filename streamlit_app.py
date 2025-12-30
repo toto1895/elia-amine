@@ -661,6 +661,9 @@ def overview():
             include_ensemble=False,
             anonymize=False,
         )
+        if content is None:
+            st.warning("XLSX report could not be retrieved.")
+            return
         df = get_pnl(content)
 
         if df is not None and not df.empty:
