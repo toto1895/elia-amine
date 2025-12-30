@@ -1791,58 +1791,63 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
 
         headers = _client.headers.copy()
         headers["referer"] = f"{API_BASE}/files"
-        headers["accept"] = "application/json, text/plain, */*"
 
-        # 1) queue
+        # ---- QUEUE ----
         queued_at = pd.Timestamp.utcnow()
         st.info("📤 Queuing XLSX export request...")
-        params = {
-            "resource": resource_id,
-            "start_date": start_date_s,
-            "end_date": end_date_s,
-            "include_ensemble": str(include_ensemble).lower(),
-            "anonymize": str(anonymize).lower(),
-            "ensemble_model": ensemble_model,
-        }
-        r = requests.get(QUEUE_ENDPOINT, headers=headers, params=params, timeout=60)
+
+        r = requests.get(
+            QUEUE_ENDPOINT,
+            headers=headers,
+            params={
+                "resource": resource_id,
+                "start_date": start_date_s,
+                "end_date": end_date_s,
+                "include_ensemble": str(include_ensemble).lower(),
+                "anonymize": str(anonymize).lower(),
+                "ensemble_model": ensemble_model,
+            },
+            timeout=60,
+        )
+
         st.info(f"Queue response: HTTP {r.status_code}")
         if r.status_code not in (200, 202):
-            st.error(f"Queue failed body: {r.text[:500]}")
-            r.raise_for_status()
+            st.error(r.text)
+            return None
 
-        # 2) poll exports
         st.info("⏳ Waiting for export to be generated...")
 
-        def _normalize_exports(payload):
-            # Accept common shapes: list | {"results":list} | {"data":list}
-            if isinstance(payload, list):
-                items = payload
-            elif isinstance(payload, dict):
-                if isinstance(payload.get("results"), list):
-                    items = payload["results"]
-                elif isinstance(payload.get("data"), list):
-                    items = payload["data"]
-                else:
-                    # sometimes a single object
-                    items = [payload]
-            else:
-                items = []
-
-            # keep only dict entries (avoid 'str' object has no attribute get)
-            return [x for x in items if isinstance(x, dict)]
-
+        # ---- EXPORT LIST ----
         def _list_exports():
             rr = requests.get(EXPORTS_ENDPOINT, headers=headers, timeout=60)
             rr.raise_for_status()
             payload = rr.json()
-            exports = _normalize_exports(payload)
-            if not exports:
-                st.info(f"Exports payload type={type(payload).__name__} keys={list(payload.keys()) if isinstance(payload, dict) else None}")
-            return exports
 
-        def _matches(e: dict) -> bool:
+            # 🔴 LOG RAW PAYLOAD (STRINGIFIED)
+            st.info(f"Raw exports payload (type={type(payload)}): {str(payload)[:500]}")
+
+            # Normalize
+            if isinstance(payload, dict):
+                items = payload.get("results") or payload.get("data") or []
+            elif isinstance(payload, list):
+                items = payload
+            else:
+                items = []
+
+            normalized = []
+            for i, x in enumerate(items):
+                if not isinstance(x, dict):
+                    # 🔴 LOG THE OFFENDING STRING / OBJECT
+                    st.error(f"Non-dict export entry at index {i}: type={type(x)}, value={x}")
+                    continue
+                normalized.append(x)
+
+            return normalized
+
+        def _matches(e):
             return (
-                e.get("export_type") == "market_report"
+                isinstance(e, dict)
+                and e.get("export_type") == "market_report"
                 and e.get("file_type") == "xlsx"
                 and e.get("resource_id") == resource_id
                 and str(e.get("start_date", "")).startswith(start_date_s)
@@ -1856,58 +1861,44 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             exports = [e for e in _list_exports() if _matches(e)]
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
 
-            st.info(f"Found {len(exports)} matching exports (dict entries)")
+            st.info(f"Matching exports count: {len(exports)}")
 
-            # choose newest export created after we queued (prevents picking old completed ones)
             for e in exports:
-                try:
-                    created_at = pd.to_datetime(e.get("created_at"), utc=True)
-                    if created_at >= queued_at:
-                        export = e
-                        break
-                except Exception:
-                    continue
+                created_at = pd.to_datetime(e.get("created_at"), utc=True, errors="coerce")
+                if created_at is not pd.NaT and created_at >= queued_at:
+                    export = e
+                    break
 
             if export:
-                st.info(f"Candidate export: id={export.get('id')} status={export.get('status')} created_at={export.get('created_at')}")
+                st.info(f"Candidate export: id={export.get('id')} status={export.get('status')}")
                 if export.get("status") == "completed":
                     break
-                if export.get("status") in ("failed", "revoked"):
-                    st.error(f"Export failed: {export}")
-                    return None
 
             time.sleep(poll_every_s)
 
-        if not export or export.get("status") != "completed":
-            st.warning(f"Timeout/no completed export. Last candidate: {export}")
+        if not export:
+            st.error("No export found after polling")
             return None
 
+        # ---- DOWNLOAD ----
         export_id = export.get("id")
-        if export_id is None:
-            st.error(f"Completed export has no id: {export}")
-            return None
+        url = f"{API_BASE}/api/v1/data/exports/{export_id}/download"
+        st.info(f"⬇️ Downloading: {url}")
 
-        # 3) download EXACT endpoint you observed
-        download_url = f"{API_BASE}/api/v1/data/exports/{export_id}/download"
-        st.info(f"⬇️ Downloading XLSX from: {download_url}")
-
-        dl = requests.get(download_url, headers=headers, timeout=120)
-        st.info(f"Download response: HTTP {dl.status_code}, content-type={dl.headers.get('content-type')}, size={len(dl.content)} bytes")
-
-        if dl.status_code != 200:
-            st.error(f"Download failed body: {dl.text[:500]}")
-            return None
+        dl = requests.get(url, headers=headers, timeout=120)
+        st.info(f"Download HTTP {dl.status_code}, bytes={len(dl.content)}")
 
         if not dl.content.startswith(b"PK"):
-            st.error(f"Not XLSX/ZIP. First bytes: {dl.content[:80]}")
+            st.error(f"Not XLSX. First bytes: {dl.content[:80]}")
             return None
 
-        st.info("✅ XLSX download successful")
+        st.success("✅ XLSX download successful")
         return io.BytesIO(dl.content)
 
     except Exception as e:
         st.error(f"Error fetching XLSX report: {e}")
         return None
+
 
 
 
