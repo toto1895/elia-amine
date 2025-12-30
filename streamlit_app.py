@@ -1777,7 +1777,7 @@ EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
-                         timeout_s=240, poll_every_s=2.0):
+                         timeout_s=240, poll_every_s=15.0):
     """
     Queue export -> poll exports list -> download XLSX bytes.
     Returns io.BytesIO or None.
