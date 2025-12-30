@@ -1799,6 +1799,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         if r.status_code not in (200, 202):
             r.raise_for_status()
 
+        time.sleep(30)
         # 2) poll exports
         def _list_exports():
             rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
