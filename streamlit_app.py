@@ -1777,23 +1777,17 @@ EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
-                         timeout_s=180, poll_every_s=2.0):
-    """
-    Queue XLSX report export, wait until it's generated, then download it.
-    Returns: io.BytesIO (xlsx bytes) or None
-    """
+                         timeout_s=240, poll_every_s=2.0):
     try:
-        # ---- 1) queue export (202 Accepted) ----
+        # 1) queue
         params = {
             "resource": resource_id,
-            "start_date": str(start_date),  # keep as YYYY-MM-DD
+            "start_date": str(start_date),
             "end_date": str(end_date),
             "include_ensemble": str(include_ensemble).lower(),
             "anonymize": str(anonymize).lower(),
-            # keep if API accepts it; harmless if ignored
             "ensemble_model": ensemble_model,
         }
-
         headers = _client.headers.copy()
         headers["referer"] = f"{API_BASE}/files"
 
@@ -1801,14 +1795,14 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         if r.status_code not in (200, 202):
             r.raise_for_status()
 
-        # ---- 2) poll exports until completed ----
+        # 2) poll exports
         def _list_exports():
             rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
             rr.raise_for_status()
             data = rr.json()
             return data["results"] if isinstance(data, dict) and "results" in data else data
 
-        def _match(e: dict) -> bool:
+        def _match(e):
             return (
                 e.get("export_type") == "market_report"
                 and e.get("file_type") == "xlsx"
@@ -1819,11 +1813,9 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
 
         deadline = time.time() + timeout_s
         export = None
-
         while time.time() < deadline:
             exports = [e for e in _list_exports() if _match(e)]
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
-
             if exports:
                 export = exports[0]
                 status = export.get("status")
@@ -1831,40 +1823,45 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                     break
                 if status in ("failed", "revoked"):
                     raise RuntimeError(f"Export failed: {export}")
-
             time.sleep(poll_every_s)
 
         if not export or export.get("status") != "completed":
             raise TimeoutError(f"Timed out waiting for export. Last seen: {export}")
 
-        # ---- 3) download file ----
+        # 3) download
         file_path = export.get("file_path")
         if not file_path:
             raise ValueError(f"Missing file_path in export: {export}")
 
-        # Try common serving paths (one of these should match what the UI uses)
         candidates = [
             f"{API_BASE}/api/mediafiles/{file_path.lstrip('/')}",
             f"{API_BASE}/mediafiles/{file_path.lstrip('/')}",
-            f"{API_BASE}{file_path if file_path.startswith('/') else '/' + file_path}",
         ]
 
-        last_err = None
+        last_debug = None
         for url in candidates:
-            try:
-                dl = requests.get(url, headers=_client.headers, timeout=120)
-                if dl.status_code == 200 and dl.content:
-                    return io.BytesIO(dl.content)
-                last_err = f"{url} -> {dl.status_code}"
-            except Exception as e:
-                last_err = f"{url} -> {e}"
+            dl = requests.get(url, headers=_client.headers, timeout=120)
+            last_debug = {
+                "url": url,
+                "status": dl.status_code,
+                "content_type": dl.headers.get("content-type"),
+                "head": dl.content[:64],
+            }
+            if dl.status_code != 200 or not dl.content:
+                continue
 
-        raise RuntimeError(f"Could not download export. Last error: {last_err}")
+            # XLSX is a ZIP => starts with b'PK'
+            if not dl.content.startswith(b"PK"):
+                # likely HTML/JSON error page; keep trying other candidate
+                continue
+
+            return io.BytesIO(dl.content)
+
+        raise RuntimeError(f"Download did not return a valid XLSX (ZIP). Last response: {last_debug}")
 
     except Exception as e:
         print(f"Error fetching XLSX report: {e}")
         return None
-
 
 
 
