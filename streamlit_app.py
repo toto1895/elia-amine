@@ -1816,31 +1816,52 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         st.info("⏳ Waiting for export to be generated...")
 
         # ---- EXPORT LIST ----
-        def _list_exports():
-            rr = requests.get(EXPORTS_ENDPOINT, headers=headers, timeout=60)
-            rr.raise_for_status()
-            payload = rr.json()
+        def list_exports(_client, max_text=1500) -> list[dict]:
+            """
+            Robust exports fetch:
+            - logs status + content-type
+            - if JSON decode fails, logs body text and returns []
+            - normalizes to list[dict]
+            """
+            rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
+            ct = (rr.headers.get("content-type") or "").lower()
+            st.info(f"exports: HTTP {rr.status_code}, content-type={ct}")
 
-            # 🔴 LOG RAW PAYLOAD (STRINGIFIED)
-            st.info(f"Raw exports payload (type={type(payload)}): {str(payload)[:500]}")
+            if rr.status_code != 200:
+                st.error(f"exports non-200 body: {rr.text[:max_text]}")
+                return []
 
-            # Normalize
-            if isinstance(payload, dict):
-                items = payload.get("results") or payload.get("data") or []
-            elif isinstance(payload, list):
+            try:
+                payload = rr.json()
+            except Exception as e:
+                st.error(f"exports JSON decode failed: {e}")
+                st.error(f"exports raw body: {rr.text[:max_text]}")
+                return []
+
+            # normalize shapes
+            if isinstance(payload, list):
                 items = payload
+            elif isinstance(payload, dict):
+                if isinstance(payload.get("results"), list):
+                    items = payload["results"]
+                elif isinstance(payload.get("data"), list):
+                    items = payload["data"]
+                else:
+                    items = [payload]  # sometimes a single object
             else:
-                items = []
+                st.error(f"exports unexpected payload type: {type(payload)}")
+                st.error(f"exports raw payload: {str(payload)[:max_text]}")
+                return []
 
-            normalized = []
+            # keep only dicts, log offenders
+            out = []
             for i, x in enumerate(items):
-                if not isinstance(x, dict):
-                    # 🔴 LOG THE OFFENDING STRING / OBJECT
-                    st.error(f"Non-dict export entry at index {i}: type={type(x)}, value={x}")
-                    continue
-                normalized.append(x)
-
-            return normalized
+                if isinstance(x, dict):
+                    out.append(x)
+                else:
+                    st.warning(f"exports[{i}] is not dict: type={type(x)} value={str(x)[:300]}")
+            st.info(f"exports parsed: {len(out)} dict entries")
+            return out
 
         def _matches(e):
             return (
