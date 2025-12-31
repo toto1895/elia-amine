@@ -1779,7 +1779,6 @@ API_BASE = "https://predico-elia.inesctec.pt"
 QUEUE_ENDPOINT = f"{API_BASE}/api/v1/market/report/xlsx-scores"
 EXPORTS_ENDPOINT = f"{API_BASE}/api/v1/data/exports/"
 
-
 def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                          ensemble_model="weighted_avg",
                          include_ensemble=False, anonymize=False,
