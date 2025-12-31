@@ -651,6 +651,7 @@ def overview():
 
         # --- XLSX report for Solar (example) ---
         st.warning('ccc')
+        
         resource_id = resource_ids["Wind"]
         content = fetch_xlsx_report_df(
             client,
