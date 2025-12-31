@@ -651,7 +651,7 @@ def overview():
 
         # --- XLSX report for Solar (example) ---
         st.warning('ccc')
-        
+
         resource_id = resource_ids["Wind"]
         content = fetch_xlsx_report_df(
             client,
@@ -1826,7 +1826,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             """
             rr = requests.get(EXPORTS_ENDPOINT, headers=_client.headers, timeout=60)
             ct = (rr.headers.get("content-type") or "").lower()
-            st.info(f"exports: HTTP {rr.status_code}, content-type={ct}")
+            #st.info(f"exports: HTTP {rr.status_code}, content-type={ct}")
 
             if rr.status_code != 200:
                 st.error(f"exports non-200 body: {rr.text[:max_text]}")
@@ -1861,7 +1861,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                     out.append(x)
                 else:
                     st.warning(f"exports[{i}] is not dict: type={type(x)} value={str(x)[:300]}")
-            st.info(f"exports parsed: {len(out)} dict entries")
+            #st.info(f"exports parsed: {len(out)} dict entries")
             return out
 
 
@@ -1882,7 +1882,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             exports = [e for e in list_exports(_client) if _matches(e)]
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
 
-            st.info(f"Matching exports count: {len(exports)}")
+            #st.info(f"Matching exports count: {len(exports)}")
 
             for e in exports:
                 created_at = pd.to_datetime(e.get("created_at"), utc=True, errors="coerce")
@@ -1908,13 +1908,13 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         st.info(f"⬇️ Downloading: {url}")
 
         dl = requests.get(url, headers=headers, timeout=120)
-        st.info(f"Download HTTP {dl.status_code}, bytes={len(dl.content)}")
+        #st.info(f"Download HTTP {dl.status_code}, bytes={len(dl.content)}")
 
         if not dl.content.startswith(b"PK"):
             st.error(f"Not XLSX. First bytes: {dl.content[:80]}")
             return None
 
-        st.success("✅ XLSX download successful")
+        #st.success("✅ XLSX download successful")
         return io.BytesIO(dl.content)
 
     except Exception as e:
