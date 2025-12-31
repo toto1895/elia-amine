@@ -1890,7 +1890,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
                     break
 
             if export:
-                st.info(f"Candidate export: id={export.get('id')} status={export.get('status')}")
+                #st.info(f"Candidate export: id={export.get('id')} status={export.get('status')}")
                 if export.get("status") == "completed":
                     break
 
@@ -1899,7 +1899,6 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         if not export:
             st.error("No export found after polling")
             return None
-
 
         # ---- DOWNLOAD ----
         export_id = export.get("id")
