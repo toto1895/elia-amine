@@ -1792,7 +1792,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
 
         # ---- QUEUE ----
         queued_at = pd.Timestamp.utcnow()
-        st.info("📤 Queuing XLSX export request...")
+        #st.info("📤 Queuing XLSX export request...")
 
         r = requests.get(
             QUEUE_ENDPOINT,
@@ -1808,7 +1808,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             timeout=60,
         )
 
-        st.info(f"Queue response: HTTP {r.status_code}")
+        #st.info(f"Queue response: HTTP {r.status_code}")
         if r.status_code not in (200, 202):
             st.error(r.text)
             return None
