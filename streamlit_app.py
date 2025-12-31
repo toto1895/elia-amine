@@ -1901,6 +1901,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
 
 
 
+
 def calculate_pnl(
     rmse_scores: pd.DataFrame,
     rmse_rank: pd.DataFrame,
