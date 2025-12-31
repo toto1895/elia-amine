@@ -1877,7 +1877,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         deadline = time.time() + timeout_s
 
         while time.time() < deadline:
-            exports = [e for e in _list_exports() if _matches(e)]
+            exports = [e for e in list_exports() if _matches(e)]
             exports.sort(key=lambda e: e.get("created_at", ""), reverse=True)
 
             st.info(f"Matching exports count: {len(exports)}")
