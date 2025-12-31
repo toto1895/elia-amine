@@ -650,7 +650,7 @@ def overview():
         }
 
         # --- XLSX report for Solar (example) ---
-        st.warning('aaa')
+        st.warning('bbb')
         resource_id = resource_ids["Wind"]
         content = fetch_xlsx_report_df(
             client,
@@ -1899,6 +1899,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
         if not export:
             st.error("No export found after polling")
             return None
+
 
         # ---- DOWNLOAD ----
         export_id = export.get("id")
