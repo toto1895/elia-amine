@@ -1863,6 +1863,7 @@ def fetch_xlsx_report_df(_client, start_date, end_date, resource_id,
             st.info(f"exports parsed: {len(out)} dict entries")
             return out
 
+
         def _matches(e):
             return (
                 isinstance(e, dict)
