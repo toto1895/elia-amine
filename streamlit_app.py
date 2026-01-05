@@ -782,10 +782,11 @@ def submission_viewer():
                 
                 # Resource selector (radio button)
                 resource_options = {
+                    
+                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2",
                     "Solar": "5792ca63-2051-4186-8c5c-7167ee1c6c6f",
-                    "Wind": "491949aa-8662-4010-8a29-75f4267a76c2"  # Using the same ID for both since it works
                 }
-                resource_type = st.radio("Select Resource Type:", list(resource_options.keys())[::-1], horizontal=True)
+                resource_type = st.radio("Select Resource Type:", list(resource_options.keys()), horizontal=True)
                 resource_id = resource_options[resource_type]
 
                 # Step 2: Fetch challenges for the selected market session and resource
